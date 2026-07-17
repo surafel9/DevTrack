@@ -10,7 +10,9 @@ class ProjectController extends Controller
 {
     public function index()
     {
-        return response()->json(Project::all());
+        return response()->json(
+            Project::with('phases')->get()
+        );
     }
 
     public function store(Request $request)
@@ -27,6 +29,8 @@ class ProjectController extends Controller
 
     public function show(Project $project)
     {
+        $project->load('phases');
+
         return response()->json($project);
     }
 

@@ -22,7 +22,7 @@ return new class extends Migration
 
             $table->string('status')->default('pending');
 
-            $table->integer('order');
+            $table->unsignedInteger('order')->default(1);
 
             $table->timestamps();
         });
