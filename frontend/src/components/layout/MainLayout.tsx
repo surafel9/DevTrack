@@ -13,7 +13,7 @@ export function MainLayout() {
         onMobileClose={() => setMobileOpen(false)}
       />
 
-      <div className="flex flex-col flex-1 min-w-0 overflow-hidden relative">
+      <div className="flex flex-col flex-1 min-w-0 overflow-hidden lg:ml-6">
         {/* Mobile only navbar */}
         <Navbar onMenuClick={() => setMobileOpen(true)} />
 
