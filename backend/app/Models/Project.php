@@ -43,4 +43,8 @@ class Project extends Model
     {
         return $this->belongsToMany(User::class);
     }
+    public function comments(): HasMany
+    {
+        return $this->hasMany(Comment::class);
+    }
 }

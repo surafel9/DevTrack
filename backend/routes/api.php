@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\PhaseController;
 use App\Http\Controllers\Api\ProjectUserController;
+use App\Http\Controllers\Api\CommentController;
 
 
 
@@ -19,3 +20,8 @@ Route::delete('/projects/{project}/phases/{phase}', [PhaseController::class, 'de
 Route::get('/projects/{project}/users', [ProjectUserController::class, 'index']);
 Route::post('/projects/{project}/users/{user}', [ProjectUserController::class, 'store']);
 Route::delete('/projects/{project}/users/{user}', [ProjectUserController::class, 'destroy']);
+
+
+Route::get('/projects/{project}/comments', [CommentController::class, 'index']);
+Route::post('/projects/{project}/comments', [CommentController::class, 'store']);
+Route::delete('/comments/{comment}', [CommentController::class, 'destroy']);
