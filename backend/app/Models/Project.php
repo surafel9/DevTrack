@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use App\Models\Stack;
 
 #[Fillable(['name', 'description'])]
 class Project extends Model
@@ -46,5 +47,14 @@ class Project extends Model
     public function comments(): HasMany
     {
         return $this->hasMany(Comment::class);
+    }
+    public function links(): HasMany
+    {
+        return $this->hasMany(Link::class);
+    }
+
+    public function stacks(): BelongsToMany
+    {
+        return $this->belongsToMany(Stack::class);
     }
 }
