@@ -1,24 +1,63 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Settings, Trash2, Calendar, Clock, Layers, Users,
-  MessageSquare, Link as LinkIcon, Plus, Trash, CheckCircle2,
-  Circle, PlayCircle, X, Folder
+  ArrowLeft,
+  Settings,
+  Calendar,
+  Clock,
+  Layers,
+  Users,
+  MessageSquare,
+  Link as LinkIcon,
+  Plus,
+  Trash,
+  CheckCircle2,
+  Circle,
+  PlayCircle,
+  X,
+  Folder,
+  BarChart3,
+  GitBranch,
+  Globe,
+  FileText,
+  Activity,
+  Pencil,
+  ExternalLink,
+  CheckCircle,
+  TrendingUp,
 } from 'lucide-react';
-import { projectsApi, phasesApi, commentsApi, linksApi, stacksApi } from '../../api/endpoints';
-import type { Project, Phase, Stack } from '../../types/models';
-import { calculateProgress, formatDate, getErrorMessage, formatRelativeTime, cn } from '../../utils';
+import {
+  projectsApi,
+  phasesApi,
+  commentsApi,
+  linksApi,
+  stacksApi,
+} from '../../api/endpoints';
+import type { Project, Phase, Stack, Comment } from '../../types/models';
+import {
+  calculateProgress,
+  formatDate,
+  getErrorMessage,
+  formatRelativeTime,
+  cn,
+} from '../../utils';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
-import { Badge, PhaseStatusBadge } from '../../components/ui/Badge';
-import { Progress } from '../../components/ui/Progress';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/Tabs';
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from '../../components/ui/Tabs';
 import { Avatar } from '../../components/ui/Avatar';
 import { ConfirmDialog } from '../../components/ui/Dialog';
 import { useToast } from '../../components/ui/Toast';
 import { Input, Textarea } from '../../components/ui/Input';
-import { PageContainer, SectionLabel } from '../../components/layout/PageLayout';
+import {
+  PageContainer,
+  SectionLabel,
+} from '../../components/layout/PageLayout';
 import { EmptyState } from '../../components/common/EmptyState';
 
 export function ProjectDetails() {
@@ -29,25 +68,113 @@ export function ProjectDetails() {
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showPhasesAll, setShowPhasesAll] = useState(false);
+  const [showLinksAll, setShowLinksAll] = useState(false);
+  const [showStackAll, setShowStackAll] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview');
 
-  const loadProject = () => {
+  const loadProject = useCallback(() => {
     if (!id) return;
-    projectsApi.get(Number(id))
-      .then((res) => {
-        const data = (res.data as any)?.data || res.data;
+    projectsApi
+      .get(Number(id))
+      .then(res => {
+        const data =
+          (res.data as unknown as { data?: Project })?.data ||
+          (res.data as unknown as Project);
         setProject(data);
       })
-      .catch((err) => {
+      .catch(err => {
         error('Failed to load project', getErrorMessage(err));
         navigate('/projects');
       })
       .finally(() => setIsLoading(false));
-  };
+  }, [id, error, navigate]); // projectsApi is stable, removed from deps
 
-  useEffect(() => { loadProject(); }, [id]);
+  useEffect(() => {
+    loadProject();
+  }, [loadProject]);
 
+  // ---- All useMemo hooks called unconditionally ----
+  const phases = useMemo(() => project?.phases || [], [project]);
+  const links = useMemo(() => project?.links || [], [project]);
+  const stacks = useMemo(() => project?.stacks || [], [project]);
+  const users = useMemo(() => project?.users || [], [project]);
+  const comments = useMemo(() => project?.comments || [], [project]);
+  const progress = useMemo(
+    () => calculateProgress(project?.phases || []),
+    [project],
+  );
+
+  const statusInfo = useMemo(() => {
+    if (progress >= 100) {
+      return {
+        label: 'Completed',
+        className: 'bg-emerald-50 text-emerald-600',
+      };
+    }
+    if (progress > 0) {
+      return {
+        label: 'In Progress',
+        className: 'bg-emerald-50 text-emerald-600',
+      };
+    }
+    return { label: 'Not Started', className: 'bg-gray-100 text-gray-500' };
+  }, [progress]);
+
+  const recentActivities = useMemo(() => {
+    const activities: Array<{
+      id: number | string;
+      text: string;
+      time: string;
+      user: { name: string; avatar?: string };
+    }> = [];
+
+    phases.forEach(phase => {
+      activities.push({
+        id: `phase-${phase.id}`,
+        text: `${phase.status === 'completed' ? 'completed' : phase.status === 'active' ? 'updated' : 'created'} the ${phase.name} phase`,
+        time: phase.updated_at || phase.created_at || '',
+        user: { name: 'System' },
+      });
+    });
+
+    comments.forEach((comment: Comment) => {
+      activities.push({
+        id: `comment-${comment.id}`,
+        text: 'added a new comment',
+        time: comment.created_at || '',
+        user: { name: comment.user?.name || 'Unknown' },
+      });
+    });
+
+    links.forEach(link => {
+      activities.push({
+        id: `link-${link.id}`,
+        text: `added a new link: ${link.title}`,
+        time: link.created_at || '',
+        user: { name: 'System' },
+      });
+    });
+
+    return activities
+      .filter(a => a.time)
+      .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
+      .slice(0, 5);
+  }, [phases, comments, links]);
+
+  // ---- Early return after all hooks ----
+  if (isLoading || !project) {
+    return (
+      <PageContainer>
+        <div className="py-20 text-center text-gray-400 text-sm">
+          Loading project…
+        </div>
+      </PageContainer>
+    );
+  }
+
+  // ---- From here `project` is guaranteed non-null ----
   const handleDelete = async () => {
-    if (!project) return;
     setIsDeleting(true);
     try {
       await projectsApi.delete(project.id);
@@ -61,141 +188,633 @@ export function ProjectDetails() {
     }
   };
 
-  if (isLoading || !project) {
-    return (
-      <PageContainer>
-        <div className="py-20 text-center text-gray-400 text-sm">Loading project…</div>
-      </PageContainer>
-    );
-  }
+  const completedPhasesCount = phases.filter(
+    p => p.status === 'completed',
+  ).length;
+  const activePhasesCount = phases.filter(p => p.status === 'active').length;
 
-  const progress = calculateProgress(project.phases || []);
+  const stats: Array<{
+    label: string;
+    value: string;
+    sub: string;
+    icon: typeof BarChart3;
+    subColor: string;
+    trend?: boolean;
+    extra?: React.ReactNode;
+    tabValue: string;
+  }> = [
+    {
+      label: 'Progress',
+      value: `${Math.round(progress)}%`,
+      sub: `${completedPhasesCount} of ${phases.length} phases completed`,
+      icon: BarChart3,
+      subColor: 'text-gray-400',
+      tabValue: 'phases',
+      extra: (
+        <div className="mt-3 h-1.5 w-full rounded-full bg-gray-100 overflow-hidden">
+          <div
+            className="h-full rounded-full bg-gray-900 transition-all duration-700"
+            style={{ width: `${Math.min(progress, 100)}%` }}
+          />
+        </div>
+      ),
+    },
+    {
+      label: 'Team Members',
+      value: String(users.length),
+      sub: '2 this month',
+      icon: Users,
+      subColor: 'text-emerald-600',
+      trend: true,
+      tabValue: 'team',
+    },
+    {
+      label: 'Phases',
+      value: String(phases.length),
+      sub: activePhasesCount > 0 ? `${activePhasesCount} Active` : '0 Active',
+      icon: Calendar,
+      subColor: 'text-emerald-600',
+      tabValue: 'phases',
+    },
+    {
+      label: 'Links',
+      value: String(links.length),
+      sub:
+        links.filter(l => l.title).length > 0
+          ? `${links.length} Active`
+          : '0 Active',
+      icon: LinkIcon,
+      subColor: 'text-emerald-600',
+      tabValue: 'links',
+    },
+    {
+      label: 'Comments',
+      value: String(comments.length),
+      sub:
+        comments.length > 0 ? `${comments.length} this month` : '0 this month',
+      icon: MessageSquare,
+      subColor: 'text-emerald-600',
+      trend: true,
+      tabValue: 'comments',
+    },
+  ];
 
   return (
     <PageContainer>
-      {/* Back button */}
-      <div className="mb-6">
-        <Button variant="ghost" size="sm" leftIcon={<ArrowLeft className="h-4 w-4" />}
-          onClick={() => navigate('/projects')} className="-ml-2">
-          Back to Projects
-        </Button>
-      </div>
-
-      {/* Hero Header */}
-      <div className="mb-8 flex flex-col sm:flex-row sm:items-start gap-6 justify-between">
-        <div className="flex items-start gap-4">
-          <div className="h-12 w-12 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center flex-shrink-0">
-            <Folder className="h-6 w-6 text-blue-600" />
-          </div>
+      {/* Header */}
+      <div className="mb-6 flex flex-col lg:flex-row lg:items-start gap-6 justify-between">
+        <div className="flex items-start gap-3">
+          <button
+            onClick={() => navigate('/projects')}
+            className="mt-1 h-8 w-8 flex-shrink-0 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-colors"
+            aria-label="Back to projects"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 leading-tight">{project.name}</h1>
-            <div className="flex items-center gap-4 mt-1.5 text-sm text-gray-500">
-              <span className="flex items-center gap-1.5">
-                <Calendar className="h-3.5 w-3.5" />
-                Created {formatDate(project.created_at)}
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold text-gray-900 leading-tight">
+                {project.name}
+              </h1>
+              <span
+                className={cn(
+                  'text-xs font-medium px-2.5 py-1 rounded-full',
+                  statusInfo.className,
+                )}
+              >
+                {statusInfo.label}
               </span>
-              {project.updated_at && (
-                <span className="flex items-center gap-1.5">
-                  <Clock className="h-3.5 w-3.5" />
-                  Updated {formatRelativeTime(project.updated_at)}
-                </span>
-              )}
             </div>
+            {project.description && (
+              <p className="text-sm text-gray-500 mt-1.5 max-w-2xl">
+                {project.description}
+              </p>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <Button variant="secondary" size="sm" onClick={() => navigate(`/projects/${project.id}/edit`)}>Edit</Button>
-          <Button variant="danger" size="sm" onClick={() => setShowDeleteConfirm(true)}>Delete</Button>
-        </div>
-      </div>
-
-      {/* Progress Card */}
-      <div className="mb-8 bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-sm font-semibold text-gray-700">Overall Progress</span>
-          <span className="text-sm font-bold text-gray-900">{Math.round(progress)}%</span>
-        </div>
-        <div className="h-2 w-full rounded-full bg-gray-100 overflow-hidden">
-          <div
-            className={`h-full rounded-full transition-all duration-700 ${
-              progress === 100 ? 'bg-emerald-500' : progress > 0 ? 'bg-blue-500' : 'bg-gray-300'
-            }`}
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-        <div className="flex items-center gap-6 mt-4 text-sm text-gray-500">
-          <span>{(project.phases || []).length} phases</span>
-          <span>·</span>
-          <span>{(project.users || []).length} members</span>
-          <span>·</span>
-          <span>{(project.stacks || []).length} technologies</span>
+          <Button
+            variant="secondary"
+            size="sm"
+            leftIcon={<Pencil className="h-3.5 w-3.5" />}
+            onClick={() => navigate(`/projects/${project.id}/edit`)}
+          >
+            Edit
+          </Button>
+          <Button
+            variant="danger"
+            size="sm"
+            leftIcon={<Trash className="h-3.5 w-3.5" />}
+            onClick={() => setShowDeleteConfirm(true)}
+          >
+            Delete
+          </Button>
+          <Button
+            size="sm"
+            leftIcon={<Plus className="h-3.5 w-3.5" />}
+            onClick={() => setActiveTab('phases')}
+          >
+            New Item
+          </Button>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
-        <Tabs defaultValue="overview" className="w-full">
-          <div className="border-b border-gray-100 px-6 pt-4 bg-gray-50/30">
-            <TabsList className="gap-1">
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="phases">Phases</TabsTrigger>
-              <TabsTrigger value="team">Team</TabsTrigger>
-              <TabsTrigger value="comments">Comments</TabsTrigger>
-              <TabsTrigger value="links">Links</TabsTrigger>
-              <TabsTrigger value="stack">Stack</TabsTrigger>
-            </TabsList>
-          </div>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <div className="border-b border-gray-200 mb-8">
+          <TabsList className="gap-6 bg-transparent border-none p-0">
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="phases">Phases</TabsTrigger>
+            <TabsTrigger value="team">Team</TabsTrigger>
+            <TabsTrigger value="comments">Comments</TabsTrigger>
+            <TabsTrigger value="links">Links</TabsTrigger>
+            <TabsTrigger value="stack">Stack</TabsTrigger>
+          </TabsList>
+        </div>
 
-          <div className="p-8">
-            <TabsContent value="overview" className="mt-0 outline-none">
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-                <div className="lg:col-span-2 space-y-2">
-                  <SectionLabel>Description</SectionLabel>
-                  <div className="mt-3 text-gray-700 text-sm leading-relaxed whitespace-pre-wrap">
-                    {project.description || <span className="text-gray-400 italic">No description provided.</span>}
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <SectionLabel>Summary</SectionLabel>
-                  <div className="mt-3 space-y-0 divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
-                    {[
-                      { label: 'Phases', value: (project.phases || []).length },
-                      { label: 'Team Members', value: (project.users || []).length },
-                      { label: 'Links', value: (project.links || []).length },
-                      { label: 'Technologies', value: (project.stacks || []).length },
-                    ].map(({ label, value }) => (
-                      <div key={label} className="flex justify-between items-center px-4 py-3 bg-white">
-                        <span className="text-sm text-gray-500">{label}</span>
-                        <span className="text-sm font-semibold text-gray-900">{value}</span>
+        <div>
+          <TabsContent value="overview" className="mt-0 outline-none">
+            {/* Stats Row */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
+              {stats.map(stat => {
+                const Icon = stat.icon;
+                return (
+                  <button
+                    key={stat.label}
+                    type="button"
+                    onClick={() => setActiveTab(stat.tabValue)}
+                    className="text-left bg-white border border-gray-200 rounded-2xl p-5 shadow-sm hover:border-gray-300 hover:shadow-md transition-all cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="h-8 w-8 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center">
+                        <Icon className="h-4 w-4 text-gray-600" />
                       </div>
-                    ))}
+                      <span className="text-xs font-medium text-gray-500">
+                        {stat.label}
+                      </span>
+                    </div>
+                    <div className="text-2xl font-bold text-gray-900 mb-1">
+                      {stat.value}
+                    </div>
+                    <p
+                      className={cn(
+                        'text-xs flex items-center gap-1',
+                        stat.subColor,
+                      )}
+                    >
+                      {stat.trend && <TrendingUp className="h-3 w-3" />}
+                      {stat.sub}
+                    </p>
+                    {stat.extra}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 mb-8">
+              {/* Left Column */}
+              <div className="xl:col-span-2 space-y-8">
+                {/* Project Overview with Chart */}
+                <Card className="!p-6 border-gray-200">
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-base font-semibold text-gray-900">
+                      Project Overview
+                    </h3>
+                    <div className="flex items-center gap-4 text-xs text-gray-500">
+                      <span className="flex items-center gap-1.5">
+                        <span className="inline-block h-0.5 w-4 bg-gray-900 rounded-full" />
+                        Progress (%)
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="inline-block h-0.5 w-4 border-t-2 border-dashed border-gray-300" />
+                        Total Phases
+                      </span>
+                    </div>
                   </div>
-                </div>
+                  <div className="flex flex-col lg:flex-row gap-8">
+                    {/* Chart */}
+                    <div className="flex-1">
+                      <div className="h-[220px] w-full relative">
+                        <svg viewBox="0 0 420 200" className="w-full h-full">
+                          {/* Grid lines */}
+                          {[0, 1, 2, 3, 4].map(i => (
+                            <line
+                              key={i}
+                              x1="40"
+                              y1={20 + i * 35}
+                              x2="380"
+                              y2={20 + i * 35}
+                              stroke="#f3f4f6"
+                              strokeWidth="1"
+                            />
+                          ))}
+                          {/* Y-axis labels (progress %) */}
+                          {[100, 75, 50, 25, 0].map((val, i) => (
+                            <text
+                              key={val}
+                              x="35"
+                              y={25 + i * 35}
+                              textAnchor="end"
+                              className="text-[10px] fill-gray-400"
+                            >
+                              {val}%
+                            </text>
+                          ))}
+                          {/* Secondary Y-axis labels (total phases) */}
+                          {[5, 4, 3, 2, 1, 0].map((val, i) => (
+                            <text
+                              key={`r-${val}`}
+                              x="398"
+                              y={25 + i * 28}
+                              textAnchor="start"
+                              className="text-[10px] fill-gray-400"
+                            >
+                              {val}
+                            </text>
+                          ))}
+                          {/* X-axis labels */}
+                          {['Jan', 'Feb', 'Mar', 'Apr', 'May'].map(
+                            (month, i) => (
+                              <text
+                                key={month}
+                                x={60 + i * 80}
+                                y="195"
+                                textAnchor="middle"
+                                className="text-[10px] fill-gray-400"
+                              >
+                                {month}
+                              </text>
+                            ),
+                          )}
+                          {/* Dotted line at 80% */}
+                          <line
+                            x1="40"
+                            y1="60"
+                            x2="380"
+                            y2="60"
+                            stroke="#e5e7eb"
+                            strokeWidth="1"
+                            strokeDasharray="4 4"
+                          />
+                          {/* Chart line */}
+                          <polyline
+                            points="60,150 140,130 220,110 300,70 360,50"
+                            fill="none"
+                            stroke="#111827"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                          {/* Data points */}
+                          {[
+                            { x: 60, y: 150 },
+                            { x: 140, y: 130 },
+                            { x: 220, y: 110 },
+                            { x: 300, y: 70 },
+                            { x: 360, y: 50 },
+                          ].map((point, i) => (
+                            <circle
+                              key={i}
+                              cx={point.x}
+                              cy={point.y}
+                              r="3"
+                              fill="#111827"
+                            />
+                          ))}
+                        </svg>
+                      </div>
+                    </div>
+
+                    {/* Summary */}
+                    <div className="w-full lg:w-64 space-y-0 divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
+                      {[
+                        {
+                          label: 'Start Date',
+                          value: project.created_at
+                            ? formatDate(project.created_at)
+                            : 'N/A',
+                          icon: Calendar,
+                        },
+                        {
+                          label: 'Target Date',
+                          value: project.updated_at
+                            ? formatRelativeTime(project.updated_at)
+                            : 'N/A',
+                          icon: Calendar,
+                        },
+                        {
+                          label: 'Total Phases',
+                          value: String(phases.length),
+                          icon: Layers,
+                        },
+                        {
+                          label: 'Completed Phases',
+                          value: String(completedPhasesCount),
+                          icon: CheckCircle,
+                        },
+                        {
+                          label: 'Active Phase',
+                          value:
+                            phases.find(p => p.status === 'active')?.name ||
+                            'None',
+                          icon: Activity,
+                        },
+                      ].map(item => {
+                        const Icon = item.icon;
+                        return (
+                          <div
+                            key={item.label}
+                            className="flex justify-between items-center px-4 py-3 bg-white"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Icon className="h-3.5 w-3.5 text-gray-400" />
+                              <span className="text-xs text-gray-500">
+                                {item.label}
+                              </span>
+                            </div>
+                            <span className="text-xs font-semibold text-gray-900 text-right max-w-[100px] truncate">
+                              {item.value}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </Card>
               </div>
-            </TabsContent>
 
-            <TabsContent value="phases" className="mt-0 outline-none">
-              <PhasesTab project={project} onUpdate={loadProject} />
-            </TabsContent>
+              {/* Right Column */}
+              <div className="space-y-6">
+                <Card className="!p-6 border-gray-200">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-base font-semibold text-gray-900">
+                      Recent Activity
+                    </h3>
+                    <button
+                      onClick={() => setActiveTab('comments')}
+                      className="text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-3 py-1"
+                    >
+                      View all
+                    </button>
+                  </div>
+                  <div className="space-y-4">
+                    {recentActivities.length > 0 ? (
+                      recentActivities.map(activity => (
+                        <div
+                          key={activity.id}
+                          className="flex items-start gap-3"
+                        >
+                          <Avatar name={activity.user.name} size="sm" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-gray-700">
+                              <span className="font-medium text-gray-900">
+                                {activity.user.name}
+                              </span>{' '}
+                              {activity.text}
+                            </p>
+                            <p className="text-xs text-gray-400 mt-0.5">
+                              {formatRelativeTime(activity.time)}
+                            </p>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-gray-400">
+                        No recent activity
+                      </p>
+                    )}
+                  </div>
+                </Card>
+              </div>
+            </div>
 
-            <TabsContent value="team" className="mt-0 outline-none">
-              <TeamTab project={project} />
-            </TabsContent>
+            {/* Phases / Quick Links / Stack widgets */}
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+              {/* Phases */}
+              <div className="xl:col-span-1">
+                <Card className="!p-0 border-gray-200 overflow-hidden">
+                  <div className="flex items-center justify-between p-5 border-b border-gray-100">
+                    <h3 className="text-sm font-semibold text-gray-900">
+                      Phases
+                    </h3>
+                    <button
+                      onClick={() => setShowPhasesAll(!showPhasesAll)}
+                      className="text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-3 py-1"
+                    >
+                      {showPhasesAll ? 'Show less' : 'View all'}
+                    </button>
+                  </div>
+                  <div className="p-5 space-y-4">
+                    {(showPhasesAll ? phases : phases.slice(0, 3)).map(
+                      phase => (
+                        <div key={phase.id} className="flex items-start gap-3">
+                          <div className="mt-0.5 flex-shrink-0">
+                            {phase.status === 'completed' && (
+                              <div className="h-5 w-5 rounded-full bg-emerald-500 flex items-center justify-center">
+                                <CheckCircle2 className="h-3 w-3 text-white" />
+                              </div>
+                            )}
+                            {phase.status === 'active' && (
+                              <div className="h-5 w-5 rounded-full bg-emerald-500 flex items-center justify-center">
+                                <PlayCircle className="h-3 w-3 text-white" />
+                              </div>
+                            )}
+                            {phase.status === 'pending' && (
+                              <div className="h-5 w-5 rounded-full border-2 border-gray-200 flex items-center justify-center">
+                                <span className="text-[10px] font-bold text-gray-400">
+                                  {phase.order + 1}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-sm font-medium text-gray-900 truncate">
+                              {phase.name}
+                            </h4>
+                            <p className="text-xs text-gray-400">
+                              {phase.status === 'completed'
+                                ? `Completed on ${formatDate(phase.updated_at || phase.created_at || '')}`
+                                : phase.status === 'active'
+                                  ? `Started on ${formatDate(phase.updated_at || phase.created_at || '')}`
+                                  : 'Not started yet'}
+                            </p>
+                          </div>
+                          {phase.status === 'completed' && (
+                            <span className="text-[10px] font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+                              Completed
+                            </span>
+                          )}
+                          {phase.status === 'active' && (
+                            <span className="text-[10px] font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+                              Active
+                            </span>
+                          )}
+                          {phase.status === 'pending' && (
+                            <span className="text-[10px] font-medium text-gray-400 bg-gray-50 px-2 py-0.5 rounded-full">
+                              Pending
+                            </span>
+                          )}
+                        </div>
+                      ),
+                    )}
+                    {phases.length === 0 && (
+                      <p className="text-sm text-gray-400 text-center py-4">
+                        No phases yet
+                      </p>
+                    )}
+                    {phases.length > 3 && !showPhasesAll && (
+                      <button
+                        onClick={() => setShowPhasesAll(true)}
+                        className="w-full text-xs text-gray-500 hover:text-gray-700 mt-2"
+                      >
+                        Show {phases.length - 3} more...
+                      </button>
+                    )}
+                  </div>
+                </Card>
+              </div>
 
-            <TabsContent value="comments" className="mt-0 outline-none">
-              <CommentsTab project={project} onUpdate={loadProject} />
-            </TabsContent>
+              {/* Quick Links */}
+              <div className="xl:col-span-1">
+                <Card className="!p-0 border-gray-200 overflow-hidden">
+                  <div className="flex items-center justify-between p-5 border-b border-gray-100">
+                    <h3 className="text-sm font-semibold text-gray-900">
+                      Quick Links
+                    </h3>
+                    <button
+                      onClick={() => setShowLinksAll(!showLinksAll)}
+                      className="text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-3 py-1"
+                    >
+                      {showLinksAll ? 'Show less' : 'View all'}
+                    </button>
+                  </div>
+                  <div className="p-5 space-y-3">
+                    {(showLinksAll ? links : links.slice(0, 3)).map(link => (
+                      <a
+                        key={link.id}
+                        href={link.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:border-gray-200 hover:bg-gray-50 transition-colors group"
+                      >
+                        <div className="h-9 w-9 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center text-gray-500 flex-shrink-0">
+                          {link.title.toLowerCase().includes('github') && (
+                            <GitBranch className="h-4 w-4" />
+                          )}
+                          {link.title.toLowerCase().includes('figma') && (
+                            <Pencil className="h-4 w-4" />
+                          )}
+                          {link.title.toLowerCase().includes('doc') && (
+                            <FileText className="h-4 w-4" />
+                          )}
+                          {(link.title.toLowerCase().includes('live') ||
+                            link.title.toLowerCase().includes('website')) && (
+                            <Globe className="h-4 w-4" />
+                          )}
+                          {!['github', 'figma', 'doc', 'live', 'website'].some(
+                            k => link.title.toLowerCase().includes(k),
+                          ) && <LinkIcon className="h-4 w-4" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="text-sm font-medium text-gray-900 truncate">
+                            {link.title}
+                          </h4>
+                          <p className="text-xs text-gray-400 truncate">
+                            {link.url.replace(/^https?:\/\//, '').split('/')[0]}
+                          </p>
+                        </div>
+                        <ExternalLink className="h-3.5 w-3.5 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </a>
+                    ))}
+                    {links.length === 0 && (
+                      <p className="text-sm text-gray-400 text-center py-4">
+                        No links yet
+                      </p>
+                    )}
+                    {links.length > 3 && !showLinksAll && (
+                      <button
+                        onClick={() => setShowLinksAll(true)}
+                        className="w-full text-xs text-gray-500 hover:text-gray-700 mt-2"
+                      >
+                        Show {links.length - 3} more...
+                      </button>
+                    )}
+                  </div>
+                </Card>
+              </div>
 
-            <TabsContent value="links" className="mt-0 outline-none">
-              <LinksTab project={project} onUpdate={loadProject} />
-            </TabsContent>
+              {/* Stack */}
+              <div className="xl:col-span-1">
+                <Card className="!p-0 border-gray-200 overflow-hidden">
+                  <div className="flex items-center justify-between p-5 border-b border-gray-100">
+                    <h3 className="text-sm font-semibold text-gray-900">
+                      Stack
+                    </h3>
+                    <button
+                      onClick={() => setShowStackAll(!showStackAll)}
+                      className="text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-3 py-1"
+                    >
+                      {showStackAll ? 'Show less' : 'View all'}
+                    </button>
+                  </div>
+                  <div className="p-5">
+                    <div className="grid grid-cols-2 gap-3">
+                      {(showStackAll ? stacks : stacks.slice(0, 4)).map(
+                        stack => (
+                          <div
+                            key={stack.id}
+                            className="flex items-center gap-2.5 p-2.5 rounded-xl border border-gray-100 bg-gray-50/50"
+                          >
+                            <div className="h-8 w-8 rounded-lg bg-white border border-gray-100 flex items-center justify-center text-gray-600 flex-shrink-0">
+                              <Layers className="h-3.5 w-3.5" />
+                            </div>
+                            <span className="text-xs font-medium text-gray-700 truncate">
+                              {stack.name}
+                            </span>
+                          </div>
+                        ),
+                      )}
+                    </div>
+                    {stacks.length === 0 && (
+                      <p className="text-sm text-gray-400 text-center py-6">
+                        No technologies added
+                      </p>
+                    )}
+                    {stacks.length > 4 && !showStackAll && (
+                      <button
+                        onClick={() => setShowStackAll(true)}
+                        className="w-full text-xs text-gray-500 hover:text-gray-700 mt-3"
+                      >
+                        Show {stacks.length - 4} more...
+                      </button>
+                    )}
+                  </div>
+                </Card>
+              </div>
+            </div>
+          </TabsContent>
 
-            <TabsContent value="stack" className="mt-0 outline-none">
-              <StackTab project={project} onUpdate={loadProject} />
-            </TabsContent>
-          </div>
-        </Tabs>
-      </div>
+          <TabsContent value="phases" className="mt-0 outline-none">
+            <PhasesTab project={project} onUpdate={loadProject} />
+          </TabsContent>
+
+          <TabsContent value="team" className="mt-0 outline-none">
+            <TeamTab project={project} />
+          </TabsContent>
+
+          <TabsContent value="comments" className="mt-0 outline-none">
+            <CommentsTab project={project} onUpdate={loadProject} />
+          </TabsContent>
+
+          <TabsContent value="links" className="mt-0 outline-none">
+            <LinksTab project={project} onUpdate={loadProject} />
+          </TabsContent>
+
+          <TabsContent value="stack" className="mt-0 outline-none">
+            <StackTab project={project} onUpdate={loadProject} />
+          </TabsContent>
+        </div>
+      </Tabs>
 
       <ConfirmDialog
         open={showDeleteConfirm}
@@ -211,7 +830,13 @@ export function ProjectDetails() {
 }
 
 // ─── PhasesTab ────────────────────────────────────────────────────────────────
-function PhasesTab({ project, onUpdate }: { project: Project; onUpdate: () => void }) {
+function PhasesTab({
+  project,
+  onUpdate,
+}: {
+  project: Project;
+  onUpdate: () => void;
+}) {
   const [isAdding, setIsAdding] = useState(false);
   const [newName, setNewName] = useState('');
   const { success, error } = useToast();
@@ -222,20 +847,31 @@ function PhasesTab({ project, onUpdate }: { project: Project; onUpdate: () => vo
     if (!newName.trim()) return;
     setIsAdding(true);
     try {
-      await phasesApi.create(project.id, { name: newName, status: 'pending', order: phases.length });
+      await phasesApi.create(project.id, {
+        name: newName,
+        status: 'pending',
+        order: phases.length,
+      });
       setNewName('');
       success('Phase added');
       onUpdate();
     } catch (err) {
       error('Failed to add phase', getErrorMessage(err));
-    } finally { setIsAdding(false); }
+    } finally {
+      setIsAdding(false);
+    }
   };
 
-  const handleStatusChange = async (phase: Phase, status: 'completed' | 'active' | 'pending') => {
+  const handleStatusChange = async (
+    phase: Phase,
+    status: 'completed' | 'active' | 'pending',
+  ) => {
     try {
       await phasesApi.update(project.id, phase.id, { status });
       onUpdate();
-    } catch (err) { error('Failed to update phase', getErrorMessage(err)); }
+    } catch (err) {
+      error('Failed to update phase', getErrorMessage(err));
+    }
   };
 
   const handleDelete = async (phaseId: number) => {
@@ -243,27 +879,42 @@ function PhasesTab({ project, onUpdate }: { project: Project; onUpdate: () => vo
       await phasesApi.delete(project.id, phaseId);
       success('Phase removed');
       onUpdate();
-    } catch (err) { error('Failed to remove phase', getErrorMessage(err)); }
+    } catch (err) {
+      error('Failed to remove phase', getErrorMessage(err));
+    }
   };
 
   return (
     <div className="space-y-6 max-w-3xl">
       <SectionLabel>Project Timeline</SectionLabel>
       <div className="space-y-3 mt-4">
-        {phases.map((phase) => (
-          <div key={phase.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border border-gray-200 rounded-xl hover:border-gray-300 transition-colors bg-white">
+        {phases.map(phase => (
+          <div
+            key={phase.id}
+            className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border border-gray-200 rounded-xl hover:border-gray-300 transition-colors bg-white"
+          >
             <div className="flex items-center gap-3 flex-1 min-w-0">
-              {phase.status === 'completed' && <CheckCircle2 className="h-5 w-5 text-emerald-500 flex-shrink-0" />}
-              {phase.status === 'active' && <PlayCircle className="h-5 w-5 text-blue-500 flex-shrink-0" />}
-              {phase.status === 'pending' && <Circle className="h-5 w-5 text-gray-300 flex-shrink-0" />}
+              {phase.status === 'completed' && (
+                <CheckCircle2 className="h-5 w-5 text-emerald-500 flex-shrink-0" />
+              )}
+              {phase.status === 'active' && (
+                <PlayCircle className="h-5 w-5 text-blue-500 flex-shrink-0" />
+              )}
+              {phase.status === 'pending' && (
+                <Circle className="h-5 w-5 text-gray-300 flex-shrink-0" />
+              )}
               <div className="min-w-0">
-                <h4 className="font-medium text-gray-900 truncate text-sm">{phase.name}</h4>
-                <p className="text-xs text-gray-400 capitalize mt-0.5">{phase.status}</p>
+                <h4 className="font-medium text-gray-900 truncate text-sm">
+                  {phase.name}
+                </h4>
+                <p className="text-xs text-gray-400 capitalize mt-0.5">
+                  {phase.status}
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-3 flex-shrink-0">
               <div className="flex items-center gap-1 p-1 bg-gray-100 rounded-lg border border-gray-200">
-                {(['pending', 'active', 'completed'] as const).map((status) => (
+                {(['pending', 'active', 'completed'] as const).map(status => (
                   <button
                     key={status}
                     onClick={() => handleStatusChange(phase, status)}
@@ -271,7 +922,7 @@ function PhasesTab({ project, onUpdate }: { project: Project; onUpdate: () => vo
                       'px-2.5 py-1 text-xs font-medium rounded-md transition-colors capitalize',
                       phase.status === status
                         ? 'bg-white text-gray-900 shadow-sm border border-gray-200/80'
-                        : 'text-gray-500 hover:text-gray-900'
+                        : 'text-gray-500 hover:text-gray-900',
                     )}
                   >
                     {status}
@@ -287,14 +938,25 @@ function PhasesTab({ project, onUpdate }: { project: Project; onUpdate: () => vo
             </div>
           </div>
         ))}
-        {phases.length === 0 && <EmptyState title="No phases yet" description="Add project phases to track progress." />}
+        {phases.length === 0 && (
+          <EmptyState
+            title="No phases yet"
+            description="Add project phases to track progress."
+          />
+        )}
       </div>
       <div className="pt-6 border-t border-gray-100">
         <form onSubmit={handleAdd} className="flex items-end gap-3 max-w-md">
           <div className="flex-1">
-            <Input placeholder="Phase name (e.g. Design, Backend…)" value={newName} onChange={(e) => setNewName(e.target.value)} />
+            <Input
+              placeholder="Phase name (e.g. Design, Backend…)"
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+            />
           </div>
-          <Button type="submit" isLoading={isAdding} disabled={!newName.trim()}>Add Phase</Button>
+          <Button type="submit" isLoading={isAdding} disabled={!newName.trim()}>
+            Add Phase
+          </Button>
         </form>
       </div>
     </div>
@@ -308,15 +970,26 @@ function TeamTab({ project }: { project: Project }) {
     <div className="space-y-6 max-w-3xl">
       <div className="flex items-center justify-between pb-4 border-b border-gray-100">
         <SectionLabel>Team Members</SectionLabel>
-        <Button size="sm" variant="secondary" leftIcon={<Plus className="h-3.5 w-3.5" />}>Add Member</Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          leftIcon={<Plus className="h-3.5 w-3.5" />}
+        >
+          Add Member
+        </Button>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
-        {users.map((user) => (
-          <div key={user.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-xl bg-white">
+        {users.map(user => (
+          <div
+            key={user.id}
+            className="flex items-center justify-between p-4 border border-gray-200 rounded-xl bg-white"
+          >
             <div className="flex items-center gap-3 min-w-0">
               <Avatar name={user.name} size="md" />
               <div className="min-w-0">
-                <h4 className="font-medium text-gray-900 text-sm truncate">{user.name}</h4>
+                <h4 className="font-medium text-gray-900 text-sm truncate">
+                  {user.name}
+                </h4>
                 <p className="text-xs text-gray-400 truncate">{user.email}</p>
               </div>
             </div>
@@ -327,7 +1000,10 @@ function TeamTab({ project }: { project: Project }) {
         ))}
         {users.length === 0 && (
           <div className="col-span-full border border-dashed border-gray-200 rounded-xl">
-            <EmptyState title="No members" description="Assign people to collaborate on this project." />
+            <EmptyState
+              title="No members"
+              description="Assign people to collaborate on this project."
+            />
           </div>
         )}
       </div>
@@ -336,7 +1012,13 @@ function TeamTab({ project }: { project: Project }) {
 }
 
 // ─── CommentsTab ──────────────────────────────────────────────────────────────
-function CommentsTab({ project, onUpdate }: { project: Project; onUpdate: () => void }) {
+function CommentsTab({
+  project,
+  onUpdate,
+}: {
+  project: Project;
+  onUpdate: () => void;
+}) {
   const { user: currentUser } = useAuth();
   const [content, setContent] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -354,21 +1036,25 @@ function CommentsTab({ project, onUpdate }: { project: Project; onUpdate: () => 
       onUpdate();
     } catch (err) {
       error('Failed to post comment', getErrorMessage(err));
-    } finally { setIsSubmitting(false); }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleDelete = async (commentId: number) => {
     try {
       await commentsApi.delete(commentId);
       onUpdate();
-    } catch (err) { error('Failed to delete comment', getErrorMessage(err)); }
+    } catch (err) {
+      error('Failed to delete comment', getErrorMessage(err));
+    }
   };
 
   return (
     <div className="max-w-3xl space-y-6">
       <SectionLabel>Discussions</SectionLabel>
       <div className="space-y-4 mt-2">
-        {comments.map((comment) => (
+        {comments.map(comment => (
           <div key={comment.id} className="flex gap-4 group">
             <div className="flex-shrink-0 mt-0.5">
               <Avatar name={comment.user?.name || 'Unknown'} size="md" />
@@ -376,8 +1062,12 @@ function CommentsTab({ project, onUpdate }: { project: Project; onUpdate: () => 
             <div className="flex-1 bg-gray-50 border border-gray-100 rounded-xl p-4">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <span className="font-semibold text-gray-900 text-sm">{comment.user?.name}</span>
-                  <span className="text-xs text-gray-400">{formatRelativeTime(comment.created_at)}</span>
+                  <span className="font-semibold text-gray-900 text-sm">
+                    {comment.user?.name}
+                  </span>
+                  <span className="text-xs text-gray-400">
+                    {formatRelativeTime(comment.created_at)}
+                  </span>
                 </div>
                 {currentUser?.id === comment.user_id && (
                   <button
@@ -388,19 +1078,39 @@ function CommentsTab({ project, onUpdate }: { project: Project; onUpdate: () => 
                   </button>
                 )}
               </div>
-              <p className="text-gray-700 text-sm whitespace-pre-wrap leading-relaxed">{comment.content}</p>
+              <p className="text-gray-700 text-sm whitespace-pre-wrap leading-relaxed">
+                {comment.content}
+              </p>
             </div>
           </div>
         ))}
-        {comments.length === 0 && <EmptyState title="No comments" description="Start the discussion with your team." />}
+        {comments.length === 0 && (
+          <EmptyState
+            title="No comments"
+            description="Start the discussion with your team."
+          />
+        )}
       </div>
       <div className="pt-6 border-t border-gray-100">
         <form onSubmit={handleSubmit} className="flex gap-4">
-          <div className="flex-shrink-0 mt-0.5"><Avatar name={currentUser?.name || ''} size="md" /></div>
+          <div className="flex-shrink-0 mt-0.5">
+            <Avatar name={currentUser?.name || ''} size="md" />
+          </div>
           <div className="flex-1 space-y-3">
-            <Textarea placeholder="Leave a comment…" value={content} onChange={(e) => setContent(e.target.value)} rows={3} />
+            <Textarea
+              placeholder="Leave a comment…"
+              value={content}
+              onChange={e => setContent(e.target.value)}
+              rows={3}
+            />
             <div className="flex justify-end">
-              <Button type="submit" isLoading={isSubmitting} disabled={!content.trim()}>Post Comment</Button>
+              <Button
+                type="submit"
+                isLoading={isSubmitting}
+                disabled={!content.trim()}
+              >
+                Post Comment
+              </Button>
             </div>
           </div>
         </form>
@@ -410,7 +1120,13 @@ function CommentsTab({ project, onUpdate }: { project: Project; onUpdate: () => 
 }
 
 // ─── LinksTab ─────────────────────────────────────────────────────────────────
-function LinksTab({ project, onUpdate }: { project: Project; onUpdate: () => void }) {
+function LinksTab({
+  project,
+  onUpdate,
+}: {
+  project: Project;
+  onUpdate: () => void;
+}) {
   const [isAdding, setIsAdding] = useState(false);
   const [title, setTitle] = useState('');
   const [url, setUrl] = useState('');
@@ -423,12 +1139,15 @@ function LinksTab({ project, onUpdate }: { project: Project; onUpdate: () => voi
     setIsAdding(true);
     try {
       await linksApi.create(project.id, { title, url });
-      setTitle(''); setUrl('');
+      setTitle('');
+      setUrl('');
       success('Link added');
       onUpdate();
     } catch (err) {
       error('Failed to add link', getErrorMessage(err));
-    } finally { setIsAdding(false); }
+    } finally {
+      setIsAdding(false);
+    }
   };
 
   const handleDelete = async (linkId: number) => {
@@ -436,7 +1155,9 @@ function LinksTab({ project, onUpdate }: { project: Project; onUpdate: () => voi
       await linksApi.delete(linkId);
       success('Link removed');
       onUpdate();
-    } catch (err) { error('Failed to remove link', getErrorMessage(err)); }
+    } catch (err) {
+      error('Failed to remove link', getErrorMessage(err));
+    }
   };
 
   return (
@@ -444,21 +1165,33 @@ function LinksTab({ project, onUpdate }: { project: Project; onUpdate: () => voi
       <div>
         <SectionLabel>External Links</SectionLabel>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
-          {links.map((link) => (
-            <div key={link.id} className="group relative p-4 flex flex-col justify-center border border-gray-200 rounded-xl hover:border-gray-300 transition-colors bg-white">
+          {links.map(link => (
+            <div
+              key={link.id}
+              className="group relative p-4 flex flex-col justify-center border border-gray-200 rounded-xl hover:border-gray-300 transition-colors bg-white"
+            >
               <button
                 onClick={() => handleDelete(link.id)}
                 className="absolute top-3 right-3 p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"
               >
                 <Trash className="h-4 w-4" />
               </button>
-              <a href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 text-left pr-8">
+              <a
+                href={link.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 text-left pr-8"
+              >
                 <div className="h-9 w-9 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center flex-shrink-0 text-gray-400 group-hover:text-gray-700 transition-colors">
                   <LinkIcon className="h-4 w-4" />
                 </div>
                 <div className="min-w-0">
-                  <h4 className="font-medium text-gray-900 text-sm truncate group-hover:underline">{link.title}</h4>
-                  <p className="text-xs text-gray-400 truncate mt-0.5">{link.url}</p>
+                  <h4 className="font-medium text-gray-900 text-sm truncate group-hover:underline">
+                    {link.title}
+                  </h4>
+                  <p className="text-xs text-gray-400 truncate mt-0.5">
+                    {link.url}
+                  </p>
                 </div>
               </a>
             </div>
@@ -466,16 +1199,46 @@ function LinksTab({ project, onUpdate }: { project: Project; onUpdate: () => voi
         </div>
         {links.length === 0 && (
           <div className="mt-4 border border-dashed border-gray-200 rounded-xl">
-            <EmptyState title="No external links" description="Add links to GitHub, Figma, Docs, etc." />
+            <EmptyState
+              title="No external links"
+              description="Add links to GitHub, Figma, Docs, etc."
+            />
           </div>
         )}
       </div>
       <div className="pt-6 border-t border-gray-100 max-w-2xl">
-        <h4 className="text-sm font-semibold text-gray-900 mb-4">Add New Link</h4>
-        <form onSubmit={handleAdd} className="flex flex-col sm:flex-row items-end gap-3">
-          <div className="flex-1 w-full"><Input label="Title" placeholder="e.g. GitHub Repository" value={title} onChange={(e) => setTitle(e.target.value)} /></div>
-          <div className="flex-1 w-full"><Input label="URL" placeholder="https://…" value={url} onChange={(e) => setUrl(e.target.value)} type="url" /></div>
-          <Button type="submit" isLoading={isAdding} disabled={!title.trim() || !url.trim()} className="w-full sm:w-auto">Add Link</Button>
+        <h4 className="text-sm font-semibold text-gray-900 mb-4">
+          Add New Link
+        </h4>
+        <form
+          onSubmit={handleAdd}
+          className="flex flex-col sm:flex-row items-end gap-3"
+        >
+          <div className="flex-1 w-full">
+            <Input
+              label="Title"
+              placeholder="e.g. GitHub Repository"
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+            />
+          </div>
+          <div className="flex-1 w-full">
+            <Input
+              label="URL"
+              placeholder="https://…"
+              value={url}
+              onChange={e => setUrl(e.target.value)}
+              type="url"
+            />
+          </div>
+          <Button
+            type="submit"
+            isLoading={isAdding}
+            disabled={!title.trim() || !url.trim()}
+            className="w-full sm:w-auto"
+          >
+            Add Link
+          </Button>
         </form>
       </div>
     </div>
@@ -483,7 +1246,13 @@ function LinksTab({ project, onUpdate }: { project: Project; onUpdate: () => voi
 }
 
 // ─── StackTab ─────────────────────────────────────────────────────────────────
-function StackTab({ project, onUpdate }: { project: Project; onUpdate: () => void }) {
+function StackTab({
+  project,
+  onUpdate,
+}: {
+  project: Project;
+  onUpdate: () => void;
+}) {
   const [availableStacks, setAvailableStacks] = useState<Stack[]>([]);
   const [newStackName, setNewStackName] = useState('');
   const [isAddingNew, setIsAddingNew] = useState(false);
@@ -491,15 +1260,25 @@ function StackTab({ project, onUpdate }: { project: Project; onUpdate: () => voi
   const projectStacks = project.stacks || [];
 
   useEffect(() => {
-    stacksApi.list().then(res => {
-      const data = Array.isArray(res.data) ? res.data : (res.data as any).data || [];
-      setAvailableStacks(data);
-    }).catch(console.error);
+    stacksApi
+      .list()
+      .then(res => {
+        const data = Array.isArray(res.data)
+          ? res.data
+          : (res.data as unknown as { data?: Stack[] }).data || [];
+        setAvailableStacks(data);
+      })
+      .catch(console.error);
   }, []);
 
   const handleAddExisting = async (stackId: number) => {
-    try { await stacksApi.addToProject(project.id, stackId); success('Technology added'); onUpdate(); }
-    catch (err) { error('Failed to add technology', getErrorMessage(err)); }
+    try {
+      await stacksApi.addToProject(project.id, stackId);
+      success('Technology added');
+      onUpdate();
+    } catch (err) {
+      error('Failed to add technology', getErrorMessage(err));
+    }
   };
 
   const handleAddNew = async (e: React.FormEvent) => {
@@ -508,64 +1287,110 @@ function StackTab({ project, onUpdate }: { project: Project; onUpdate: () => voi
     setIsAddingNew(true);
     try {
       const res = await stacksApi.create({ name: newStackName });
-      const createdStack = (res.data as any).data || res.data;
+      const createdStack =
+        (res.data as unknown as { data?: Stack }).data ||
+        (res.data as unknown as Stack);
       await stacksApi.addToProject(project.id, createdStack.id);
       setNewStackName('');
       success('Technology added');
       onUpdate();
       stacksApi.list().then(r => {
-        const data = Array.isArray(r.data) ? r.data : (r.data as any).data || [];
+        const data = Array.isArray(r.data)
+          ? r.data
+          : (r.data as unknown as { data?: Stack[] }).data || [];
         setAvailableStacks(data);
       });
-    } catch (err) { error('Failed to add technology', getErrorMessage(err)); }
-    finally { setIsAddingNew(false); }
+    } catch (err) {
+      error('Failed to add technology', getErrorMessage(err));
+    } finally {
+      setIsAddingNew(false);
+    }
   };
 
   const handleRemove = async (stackId: number) => {
-    try { await stacksApi.removeFromProject(project.id, stackId); success('Technology removed'); onUpdate(); }
-    catch (err) { error('Failed to remove technology', getErrorMessage(err)); }
+    try {
+      await stacksApi.removeFromProject(project.id, stackId);
+      success('Technology removed');
+      onUpdate();
+    } catch (err) {
+      error('Failed to remove technology', getErrorMessage(err));
+    }
   };
 
-  const unassignedStacks = availableStacks.filter(s => !projectStacks.some(ps => ps.id === s.id));
+  const unassignedStacks = availableStacks.filter(
+    s => !projectStacks.some(ps => ps.id === s.id),
+  );
 
   return (
     <div className="max-w-4xl space-y-10">
       <div>
         <SectionLabel>Project Stack</SectionLabel>
         <div className="flex flex-wrap gap-2 mt-4">
-          {projectStacks.map((stack) => (
-            <div key={stack.id} className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 bg-white shadow-sm text-sm font-medium text-gray-700">
+          {projectStacks.map(stack => (
+            <div
+              key={stack.id}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 bg-white shadow-sm text-sm font-medium text-gray-700"
+            >
               <span>{stack.name}</span>
-              <button onClick={() => handleRemove(stack.id)} className="text-gray-400 hover:text-red-500 transition-colors p-0.5 rounded">
+              <button
+                onClick={() => handleRemove(stack.id)}
+                className="text-gray-400 hover:text-red-500 transition-colors p-0.5 rounded"
+              >
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>
           ))}
           {projectStacks.length === 0 && (
             <div className="w-full border border-dashed border-gray-200 rounded-xl">
-              <EmptyState title="No technologies" description="Specify the stack being used for this project." />
+              <EmptyState
+                title="No technologies"
+                description="Specify the stack being used for this project."
+              />
             </div>
           )}
         </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-10 pt-8 border-t border-gray-100">
         <div>
-          <h4 className="text-sm font-semibold text-gray-900 mb-4">Add Existing</h4>
+          <h4 className="text-sm font-semibold text-gray-900 mb-4">
+            Add Existing
+          </h4>
           <div className="flex flex-wrap gap-2">
             {unassignedStacks.map(stack => (
-              <button key={stack.id} onClick={() => handleAddExisting(stack.id)}
-                className="px-3 py-1.5 rounded-lg border border-dashed border-gray-300 text-sm text-gray-600 hover:border-gray-400 hover:text-gray-900 bg-gray-50 hover:bg-white transition-colors flex items-center gap-1.5">
-                <Plus className="h-3 w-3" />{stack.name}
+              <button
+                key={stack.id}
+                onClick={() => handleAddExisting(stack.id)}
+                className="px-3 py-1.5 rounded-lg border border-dashed border-gray-300 text-sm text-gray-600 hover:border-gray-400 hover:text-gray-900 bg-gray-50 hover:bg-white transition-colors flex items-center gap-1.5"
+              >
+                <Plus className="h-3 w-3" />
+                {stack.name}
               </button>
             ))}
-            {unassignedStacks.length === 0 && <p className="text-sm text-gray-400">All technologies have been added.</p>}
+            {unassignedStacks.length === 0 && (
+              <p className="text-sm text-gray-400">
+                All technologies have been added.
+              </p>
+            )}
           </div>
         </div>
         <div>
-          <h4 className="text-sm font-semibold text-gray-900 mb-4">Create New</h4>
+          <h4 className="text-sm font-semibold text-gray-900 mb-4">
+            Create New
+          </h4>
           <form onSubmit={handleAddNew} className="flex gap-2 max-w-sm">
-            <Input placeholder="e.g. Next.js" value={newStackName} onChange={(e) => setNewStackName(e.target.value)} />
-            <Button type="submit" isLoading={isAddingNew} disabled={!newStackName.trim()} variant="secondary">Add</Button>
+            <Input
+              placeholder="e.g. Next.js"
+              value={newStackName}
+              onChange={e => setNewStackName(e.target.value)}
+            />
+            <Button
+              type="submit"
+              isLoading={isAddingNew}
+              disabled={!newStackName.trim()}
+              variant="secondary"
+            >
+              Add
+            </Button>
           </form>
         </div>
       </div>
