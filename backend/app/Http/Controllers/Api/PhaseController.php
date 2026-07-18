@@ -9,10 +9,11 @@ use App\Models\Project;
 
 class PhaseController extends Controller
 {
-    public function index()
+
+    public function index(Project $project)
     {
         return response()->json(
-            Phase::all()
+            $project->phases
         );
     }
 
@@ -20,9 +21,11 @@ class PhaseController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'status' => 'nullable|string',
-            'order' => 'required|integer',
+            'status' => 'required|string',
+            // 'order' => 'required|integer|min:1',
         ]);
+
+        $validated['order'] = ($project->phases()->max('order') ?? 0) + 1;
 
         $phase = $project->phases()->create($validated);
 
@@ -34,12 +37,14 @@ class PhaseController extends Controller
         return response()->json($phase);
     }
 
-    public function update(Request $request, Phase $phase)
+    public function update(Request $request, Project $project, Phase $phase)
     {
+        abort_if($phase->project_id !== $project->id, 404);
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'status' => 'nullable|string',
-            'order' => 'required|integer',
+            'status' => 'required|string',
+            'order' => 'required|integer|min:1',
         ]);
 
         $phase->update($validated);
@@ -47,12 +52,14 @@ class PhaseController extends Controller
         return response()->json($phase);
     }
 
-    public function destroy(Phase $phase)
+    public function destroy(Project $project, Phase $phase)
     {
+        abort_if($phase->project_id !== $project->id, 404);
+
         $phase->delete();
 
         return response()->json([
-            'message' => 'Phase deleted successfully'
+            'message' => 'Phase deleted successfully',
         ]);
     }
 }
