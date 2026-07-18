@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\CommentController;
 use App\Http\Controllers\Api\LinkController;
 use App\Http\Controllers\Api\StackController;
 use App\Http\Controllers\Api\ProjectStackController;
+use App\Http\Controllers\Api\AuthController;
 
 
 Route::apiResource('projects', ProjectController::class);
@@ -40,3 +41,11 @@ Route::post('/stacks', [StackController::class, 'store']);
 Route::get('/projects/{project}/stacks', [ProjectStackController::class, 'index']);
 Route::post('/projects/{project}/stacks/{stack}', [ProjectStackController::class, 'store']);
 Route::delete('/projects/{project}/stacks/{stack}', [ProjectStackController::class, 'destroy']);
+
+
+Route::post('/register', [AuthController::class, 'register']);
+Route::post('/login', [AuthController::class, 'login']);
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/profile', [AuthController::class, 'profile']);
+    Route::post('/logout', [AuthController::class, 'logout']);
+});
