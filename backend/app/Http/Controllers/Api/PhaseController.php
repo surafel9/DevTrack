@@ -3,54 +3,48 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StorePhaseRequest;
+use App\Http\Requests\UpdatePhaseRequest;
+use App\Http\Resources\PhaseResource;
 use App\Models\Phase;
-use Illuminate\Http\Request;
 use App\Models\Project;
 
 class PhaseController extends Controller
 {
-
     public function index(Project $project)
     {
-        return response()->json(
+        return PhaseResource::collection(
             $project->phases
         );
     }
 
-    public function store(Request $request, Project $project)
+
+    public function store(StorePhaseRequest $request, Project $project)
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'status' => 'required|string',
-            // 'order' => 'required|integer|min:1',
-        ]);
+        $data = $request->validated();
 
-        $validated['order'] = ($project->phases()->max('order') ?? 0) + 1;
+        $data['order'] = ($project->phases()->max('order') ?? 0) + 1;
 
-        $phase = $project->phases()->create($validated);
+        $phase = $project->phases()->create($data);
 
-        return response()->json($phase, 201);
+        return new PhaseResource($phase);
     }
 
-    public function show(Phase $phase)
-    {
-        return response()->json($phase);
-    }
 
-    public function update(Request $request, Project $project, Phase $phase)
-    {
+    public function update(
+        UpdatePhaseRequest $request,
+        Project $project,
+        Phase $phase
+    ) {
         abort_if($phase->project_id !== $project->id, 404);
 
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'status' => 'required|string',
-            'order' => 'required|integer|min:1',
-        ]);
+        $phase->update(
+            $request->validated()
+        );
 
-        $phase->update($validated);
-
-        return response()->json($phase);
+        return new PhaseResource($phase);
     }
+
 
     public function destroy(Project $project, Phase $phase)
     {
@@ -59,7 +53,7 @@ class PhaseController extends Controller
         $phase->delete();
 
         return response()->json([
-            'message' => 'Phase deleted successfully',
+            'message' => 'Phase deleted successfully'
         ]);
     }
 }

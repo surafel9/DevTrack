@@ -3,43 +3,43 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Project;
 use App\Http\Requests\StoreProjectRequest;
 use App\Http\Requests\UpdateProjectRequest;
+use App\Http\Resources\ProjectResource;
+use App\Models\Project;
 
 class ProjectController extends Controller
 {
     public function index()
     {
-        return response()->json(
+        return ProjectResource::collection(
             Project::with('phases')->get()
         );
     }
 
     public function store(StoreProjectRequest $request)
     {
-        $validated = $request->validated();
+        $project = Project::create(
+            $request->validated()
+        );
 
-        $project = Project::create($validated);
-
-        return response()->json($project, 201);
+        return new ProjectResource($project);
     }
 
     public function show(Project $project)
     {
         $project->load('phases');
 
-        return response()->json($project);
+        return new ProjectResource($project);
     }
-
 
     public function update(UpdateProjectRequest $request, Project $project)
     {
-        $validated = $request->validated();
+        $project->update(
+            $request->validated()
+        );
 
-        $project->update($validated);
-
-        return response()->json($project);
+        return new ProjectResource($project);
     }
 
     public function destroy(Project $project)
