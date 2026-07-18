@@ -25,6 +25,10 @@ class ProjectResource extends JsonResource
             'phases' => PhaseResource::collection(
                 $this->whenLoaded('phases')
             ),
+            'users' => $this->whenLoaded('users'),
+            'links' => $this->whenLoaded('links'),
+            'stacks' => $this->whenLoaded('stacks'),
+            'comments' => $this->whenLoaded('comments'),
         ];
     }
 }

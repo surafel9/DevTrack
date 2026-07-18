@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Comment;
 use App\Models\Project;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class CommentController extends Controller
 {
@@ -24,14 +25,12 @@ class CommentController extends Controller
                 'required',
                 'string'
             ],
-            'user_id' => [
-                'required',
-                'exists:users,id'
-            ],
         ]);
 
-
-        $comment = $project->comments()->create($validated);
+        $comment = $project->comments()->create([
+            ...$validated,
+            'user_id' => Auth::id(),
+        ]);
 
 
         return response()->json(

@@ -13,7 +13,7 @@ class ProjectController extends Controller
     public function index()
     {
         return ProjectResource::collection(
-            Project::with('phases')->get()
+            Project::with('phases', 'users', 'links', 'stacks', 'comments')->get()
         );
     }
 
@@ -28,7 +28,7 @@ class ProjectController extends Controller
 
     public function show(Project $project)
     {
-        $project->load('phases');
+        $project->load('phases', 'users', 'links', 'stacks', 'comments');
 
         return new ProjectResource($project);
     }
