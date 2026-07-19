@@ -15,8 +15,8 @@ class UpdatePhaseRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => ['required', 'string', 'max:255'],
-            'status' => ['required', 'string'],
+            'name' => ['sometimes', 'string', 'max:255'],
+            'status' => ['sometimes', 'string'],
         ];
     }
 }
