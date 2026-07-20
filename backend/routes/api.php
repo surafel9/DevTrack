@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\StackController;
 use App\Http\Controllers\Api\ProjectStackController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ProjectResourceController;
+use App\Http\Controllers\Api\ProjectMemberController;
 
 Route::apiResource('projects', ProjectController::class);
 
@@ -57,3 +58,8 @@ Route::post('/projects/{project}/resources', [ProjectResourceController::class, 
 Route::get('/resources/{resource}', [ProjectResourceController::class, 'show']);
 Route::put('/resources/{resource}', [ProjectResourceController::class, 'update']);
 Route::delete('/resources/{resource}', [ProjectResourceController::class, 'destroy']);
+
+
+Route::get('/projects/{project}/members', [ProjectMemberController::class, 'index']);
+Route::post('/projects/{project}/members', [ProjectMemberController::class, 'store']);
+Route::delete('/projects/{project}/members/{userId}', [ProjectMemberController::class, 'destroy']);

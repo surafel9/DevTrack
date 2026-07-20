@@ -13,7 +13,7 @@ class ProjectController extends Controller
     public function index()
     {
         return ProjectResource::collection(
-            Project::with('phases', 'users', 'links', 'stacks', 'comments')->get()
+            Project::with('phases', 'members', 'links', 'stacks', 'comments')->get()
         );
     }
 
@@ -23,12 +23,15 @@ class ProjectController extends Controller
             $request->validated()
         );
 
+        $project->members()->attach(
+            $request->user()->id
+        );
         return new ProjectResource($project);
     }
 
     public function show(Project $project)
     {
-        $project->load('phases', 'users', 'links', 'stacks', 'comments');
+        $project->load('phases', 'members', 'links', 'stacks', 'comments');
 
         return new ProjectResource($project);
     }
