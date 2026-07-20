@@ -57,4 +57,9 @@ class Project extends Model
     {
         return $this->belongsToMany(Stack::class);
     }
+
+    public function resources(): HasMany
+    {
+        return $this->hasMany(ProjectResource::class);
+    }
 }

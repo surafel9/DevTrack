@@ -9,7 +9,7 @@ use App\Http\Controllers\Api\LinkController;
 use App\Http\Controllers\Api\StackController;
 use App\Http\Controllers\Api\ProjectStackController;
 use App\Http\Controllers\Api\AuthController;
-
+use App\Http\Controllers\Api\ProjectResourceController;
 
 Route::apiResource('projects', ProjectController::class);
 
@@ -49,3 +49,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/profile', [AuthController::class, 'profile']);
     Route::post('/logout', [AuthController::class, 'logout']);
 });
+
+
+Route::get('/projects/{project}/resources', [ProjectResourceController::class, 'index']);
+Route::post('/projects/{project}/resources', [ProjectResourceController::class, 'store']);
+
+Route::get('/resources/{resource}', [ProjectResourceController::class, 'show']);
+Route::put('/resources/{resource}', [ProjectResourceController::class, 'update']);
+Route::delete('/resources/{resource}', [ProjectResourceController::class, 'destroy']);
