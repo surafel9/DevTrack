@@ -16,6 +16,8 @@ import type {
   CreateCommentData,
   CreateLinkData,
   CreateStackData,
+  ProjectResource,
+  CreateResourceData,
 } from '../types/models';
 
 // ─── Auth ──────────────────────────────────────────────────────────────────────
@@ -110,4 +112,21 @@ export const stacksApi = {
 export const teamApi = {
   listForProject: (projectId: number) =>
     api.get<User[]>(`/projects/${projectId}/users`),
+};
+
+// ─── Resources ────────────────────────────────────────────────────────────────
+
+export const resourcesApi = {
+  list: (projectId: number) =>
+    api.get<ProjectResource[]>(`/projects/${projectId}/resources`),
+
+  create: (projectId: number, data: CreateResourceData) =>
+    api.post<ProjectResource>(`/projects/${projectId}/resources`, data),
+
+  get: (resourceId: number) => api.get<ProjectResource>(`/resources/${resourceId}`),
+
+  update: (resourceId: number, data: Partial<CreateResourceData>) =>
+    api.put<ProjectResource>(`/resources/${resourceId}`, data),
+
+  delete: (resourceId: number) => api.delete(`/resources/${resourceId}`),
 };

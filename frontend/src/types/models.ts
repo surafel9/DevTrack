@@ -57,6 +57,17 @@ export interface Project {
   updated_at?: string;
 }
 
+export interface ProjectResource {
+  id: number;
+  project_id: number;
+  title: string;
+  url: string;
+  username?: string;
+  password?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface PaginatedResponse<T> {
   data: T[];
   current_page: number;
@@ -120,4 +131,11 @@ export interface CreateLinkData {
 
 export interface CreateStackData {
   name: string;
+}
+
+export interface CreateResourceData {
+  title: string;
+  url: string;
+  username?: string;
+  password?: string;
 }

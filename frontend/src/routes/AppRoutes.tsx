@@ -8,6 +8,8 @@ import { Dashboard } from '../pages/dashboard/Dashboard';
 import { Projects } from '../pages/projects/Projects';
 import { CreateProject } from '../pages/projects/CreateProject';
 import { ProjectDetails } from '../pages/projects/ProjectDetails';
+import { ProjectResources } from '../pages/resources/ProjectResources';
+
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -63,6 +65,7 @@ export function AppRoutes() {
         <Route path="/projects" element={<Projects />} />
         <Route path="/projects/create" element={<CreateProject />} />
         <Route path="/projects/:id" element={<ProjectDetails />} />
+        <Route path="/project-resources" element={<ProjectResources />} />
       </Route>
       
       {/* Catch all */}

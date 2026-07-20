@@ -36,6 +36,11 @@ const navItems: NavItem[] = [
     icon: <LayoutGrid className="h-[18px] w-[18px]" />,
   },
   {
+    label: 'Project Resources',
+    href: '/project-resources',
+    icon: <LayoutGrid className="h-[18px] w-[18px]" />,
+  },
+  {
     label: 'Team',
     href: '/team',
     icon: <Users className="h-[18px] w-[18px]" />,
