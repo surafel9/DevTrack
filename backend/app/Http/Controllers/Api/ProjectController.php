@@ -19,12 +19,6 @@ class ProjectController extends Controller
 
     public function store(StoreProjectRequest $request)
     {
-        abort_unless(
-            $request->user()->hasPermission('create_project'),
-            403,
-            'You do not have permission to create projects.'
-        );
-
         $project = Project::create(
             $request->validated()
         );
@@ -32,6 +26,7 @@ class ProjectController extends Controller
         $project->members()->attach(
             $request->user()->id
         );
+
         return new ProjectResource($project);
     }
 

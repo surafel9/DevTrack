@@ -22,7 +22,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/profile', [AuthController::class, 'profile']);
     Route::post('/logout', [AuthController::class, 'logout']);
 
-    Route::apiResource('projects', ProjectController::class);
+    Route::apiResource('projects', ProjectController::class)->except(['store']);
+    Route::post('/projects', [ProjectController::class, 'store'])
+        ->middleware('permission:create_project');
 
     Route::get('/projects/{project}/phases', [PhaseController::class, 'index']);
     Route::post('/projects/{project}/phases', [PhaseController::class, 'store']);
