@@ -9,14 +9,22 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { AvatarGroup } from '../../components/ui/Avatar';
 import { ProjectCardSkeleton } from '../../components/ui/Skeleton';
-import { PageContainer, PageHeader, Toolbar } from '../../components/layout/PageLayout';
+import {
+  PageContainer,
+  PageHeader,
+  Toolbar,
+} from '../../components/layout/PageLayout';
 import { EmptyState } from '../../components/common/EmptyState';
 
 // Simple deterministic color palette for project icons
 const PROJECT_COLORS = [
   { bg: 'bg-blue-50', text: 'text-blue-600', border: 'border-blue-100' },
   { bg: 'bg-violet-50', text: 'text-violet-600', border: 'border-violet-100' },
-  { bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-100' },
+  {
+    bg: 'bg-emerald-50',
+    text: 'text-emerald-600',
+    border: 'border-emerald-100',
+  },
   { bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-100' },
   { bg: 'bg-rose-50', text: 'text-rose-600', border: 'border-rose-100' },
   { bg: 'bg-cyan-50', text: 'text-cyan-600', border: 'border-cyan-100' },
@@ -43,12 +51,13 @@ export function Projects() {
   const [search, setSearch] = useState('');
 
   const isAdmin = user?.role === 'admin';
-  const canCreate = isAdmin || (user?.permissions || []).includes('create_project');
+  const canCreate =
+    isAdmin || (user?.permissions || []).includes('create_project');
 
   useEffect(() => {
     projectsApi
       .list()
-      .then((res) => {
+      .then(res => {
         const data = Array.isArray(res.data)
           ? res.data
           : (res.data as { data: Project[] }).data || [];
@@ -64,12 +73,12 @@ export function Projects() {
     setFiltered(
       q
         ? projects.filter(
-            (p) =>
+            p =>
               p.name.toLowerCase().includes(q) ||
               p.description.toLowerCase().includes(q) ||
-              (p.stacks || []).some((s) => s.name.toLowerCase().includes(q))
+              (p.stacks || []).some(s => s.name.toLowerCase().includes(q)),
           )
-        : projects
+        : projects,
     );
   }, [search, projects]);
 
@@ -80,7 +89,10 @@ export function Projects() {
         description="Manage all your active and past projects in one place."
         actions={
           canCreate ? (
-            <Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => navigate('/projects/create')}>
+            <Button
+              leftIcon={<Plus className="h-4 w-4" />}
+              onClick={() => navigate('/projects/create')}
+            >
               New Project
             </Button>
           ) : undefined
@@ -94,48 +106,82 @@ export function Projects() {
               placeholder="Search projects..."
               leftIcon={<Search className="h-4 w-4" />}
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={e => setSearch(e.target.value)}
             />
           </div>
         }
         right={
           <span className="text-sm text-gray-500">
-            {!isLoading && `${filtered.length} project${filtered.length !== 1 ? 's' : ''}`}
+            {!isLoading &&
+              `${filtered.length} project${filtered.length !== 1 ? 's' : ''}`}
           </span>
         }
       />
 
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {Array.from({ length: 8 }).map((_, i) => <ProjectCardSkeleton key={i} />)}
+          {Array.from({ length: 8 }).map((_, i) => (
+            <ProjectCardSkeleton key={i} />
+          ))}
         </div>
       ) : filtered.length === 0 ? (
         <div className="border border-dashed border-gray-200 rounded-2xl bg-white">
           <EmptyState
-            title={search ? 'No results found' : isAdmin ? 'No projects yet' : 'You are not assigned to any projects yet.'}
-            description={search ? `No projects match "${search}"` : canCreate ? 'Create your first project to get started.' : 'When you are added to a project, it will appear here.'}
-            action={!search && canCreate ? <Button onClick={() => navigate('/projects/create')}>Create Project</Button> : undefined}
+            title={
+              search
+                ? 'No results found'
+                : isAdmin
+                  ? 'No projects yet'
+                  : 'You are not assigned to any projects yet.'
+            }
+            description={
+              search
+                ? `No projects match "${search}"`
+                : canCreate
+                  ? 'Create your first project to get started.'
+                  : 'When you are added to a project, it will appear here.'
+            }
+            action={
+              !search && canCreate ? (
+                <Button onClick={() => navigate('/projects/create')}>
+                  Create Project
+                </Button>
+              ) : undefined
+            }
           />
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filtered.map((project) => {
+          {filtered.map(project => {
             const progress = calculateProgress(project.phases || []);
-            const members = (project.users || []).map((u) => u.name);
+            const members = (project.users || []).map(u => u.name);
             const color = getProjectColor(project.id);
             const phasesCount = (project.phases || []).length;
-            const completedPhases = (project.phases || []).filter(p => p.status === 'completed').length;
-            const sortedPhases = [...(project.phases || [])].sort((a, b) => a.order - b.order);
-            const currentPhase = sortedPhases.find(p => p.status === 'active') || sortedPhases.find(p => p.status === 'pending');
-            
+            const completedPhases = (project.phases || []).filter(
+              p => p.status === 'completed',
+            ).length;
+            const sortedPhases = [...(project.phases || [])].sort(
+              (a, b) => a.order - b.order,
+            );
+            const currentPhase =
+              sortedPhases.find(p => p.status === 'active') ||
+              sortedPhases.find(p => p.status === 'pending');
+
             let phaseText = 'No phases';
             if (currentPhase) {
-              phaseText = currentPhase.status === 'active' ? `${currentPhase.name} (Under Development)` : currentPhase.name;
+              phaseText =
+                currentPhase.status === 'active'
+                  ? `${currentPhase.name} (Under Development)`
+                  : currentPhase.name;
             } else if (phasesCount > 0 && completedPhases === phasesCount) {
               phaseText = 'All phases completed';
             }
-            
-            const phaseStatus = currentPhase ? `Phase ${sortedPhases.indexOf(currentPhase) + 1} of ${phasesCount}` : (phasesCount > 0 ? 'Completed' : 'Setup');
+
+            const phaseStatus = currentPhase
+              ? `Phase ${sortedPhases.indexOf(currentPhase) + 1} of ${phasesCount}`
+              : phasesCount > 0
+                ? 'Completed'
+                : 'Setup';
 
             return (
               <div
@@ -153,15 +199,21 @@ export function Projects() {
                         {project.description || 'No description provided.'}
                       </p>
                     </div>
-                    <div className={`h-8 w-8 rounded-lg border ${color.bg} ${color.border} flex items-center justify-center flex-shrink-0`}>
+                    <div
+                      className={`h-8 w-8 rounded-lg border ${color.bg} ${color.border} flex items-center justify-center flex-shrink-0`}
+                    >
                       <Folder className={`h-4 w-4 ${color.text}`} />
                     </div>
                   </div>
 
                   <div className="bg-gray-50 rounded-lg p-2.5 border border-gray-100 flex flex-col gap-1.5 mt-auto">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">{phaseStatus}</span>
-                      <span className="text-[11px] font-semibold text-gray-700">{Math.round(progress)}%</span>
+                      <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">
+                        {phaseStatus}
+                      </span>
+                      <span className="text-[11px] font-semibold text-gray-700">
+                        {Math.round(progress)}%
+                      </span>
                     </div>
                     <div className="text-xs font-medium text-gray-700 line-clamp-1">
                       {phaseText}
@@ -169,7 +221,11 @@ export function Projects() {
                     <div className="h-1 w-full rounded-full bg-gray-200 overflow-hidden mt-1">
                       <div
                         className={`h-full rounded-full transition-all duration-500 ${
-                          progress === 100 ? 'bg-emerald-500' : progress > 0 ? 'bg-blue-500' : 'bg-gray-400'
+                          progress === 100
+                            ? 'bg-emerald-500'
+                            : progress > 0
+                              ? 'bg-blue-500'
+                              : 'bg-gray-400'
                         }`}
                         style={{ width: `${progress}%` }}
                       />
@@ -180,15 +236,22 @@ export function Projects() {
                 <div className="px-4 py-2.5 border-t border-gray-100 flex items-center justify-between gap-2 bg-white">
                   <div className="flex gap-1 flex-wrap">
                     {(project.stacks || []).slice(0, 2).map(s => (
-                      <span key={s.id} className="text-[10px] font-medium text-gray-600 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5">
+                      <span
+                        key={s.id}
+                        className="text-[10px] font-medium text-gray-600 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5"
+                      >
                         {s.name}
                       </span>
                     ))}
                     {(project.stacks || []).length > 2 && (
-                      <span className="text-[10px] font-medium text-gray-400">+{(project.stacks || []).length - 2}</span>
+                      <span className="text-[10px] font-medium text-gray-400">
+                        +{(project.stacks || []).length - 2}
+                      </span>
                     )}
                   </div>
-                  {members.length > 0 && <AvatarGroup names={members} max={3} size="sm" />}
+                  {members.length > 0 && (
+                    <AvatarGroup names={members} max={3} size="sm" />
+                  )}
                 </div>
               </div>
             );

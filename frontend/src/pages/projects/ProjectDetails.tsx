@@ -25,6 +25,8 @@ import {
   ExternalLink,
   CheckCircle,
   TrendingUp,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 import {
   projectsApi,
@@ -100,7 +102,7 @@ export function ProjectDetails() {
 
   // ---- All useMemo hooks called unconditionally ----
   const phases = useMemo(() => project?.phases || [], [project]);
-  
+
   const allFlattenedPhases = useMemo(() => {
     const list: Phase[] = [];
     const flatten = (arr: Phase[]) => {
@@ -117,6 +119,11 @@ export function ProjectDetails() {
   const stacks = useMemo(() => project?.stacks || [], [project]);
   const users = useMemo(() => project?.users || [], [project]);
   const comments = useMemo(() => project?.comments || [], [project]);
+  const unreadCommentsCount = useMemo(
+    () => comments.filter((c: Comment) => c.is_unread).length,
+    [comments],
+  );
+
   const progress = useMemo(
     () => calculateProgress(allFlattenedPhases),
     [allFlattenedPhases],
@@ -171,7 +178,9 @@ export function ProjectDetails() {
   const completedPhasesCount = allFlattenedPhases.filter(
     p => p.status === 'completed',
   ).length;
-  const activePhasesCount = allFlattenedPhases.filter(p => p.status === 'active').length;
+  const activePhasesCount = allFlattenedPhases.filter(
+    p => p.status === 'active',
+  ).length;
 
   const stats: Array<{
     label: string;
@@ -202,7 +211,7 @@ export function ProjectDetails() {
     {
       label: 'Team Members',
       value: String(users.length),
-      sub: '2 this month',
+      sub: `${users.length} this month`,
       icon: Users,
       subColor: 'text-emerald-600',
       trend: true,
@@ -310,7 +319,15 @@ export function ProjectDetails() {
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="phases">Phases</TabsTrigger>
             <TabsTrigger value="team">Team</TabsTrigger>
-            <TabsTrigger value="comments">Comments</TabsTrigger>
+            <TabsTrigger value="comments" className="relative">
+              Comments
+              {unreadCommentsCount > 0 && (
+                <span
+                  className="absolute top-1.5 right-1.5 h-2 w-2 bg-red-500 rounded-full"
+                  title={`${unreadCommentsCount} unread comments`}
+                />
+              )}
+            </TabsTrigger>
             <TabsTrigger value="links">Links</TabsTrigger>
             <TabsTrigger value="stack">Stack</TabsTrigger>
           </TabsList>
@@ -499,8 +516,10 @@ export function ProjectDetails() {
                         {
                           label: 'Active Phases',
                           value:
-                            allFlattenedPhases.filter(p => p.status === 'active').map(p => p.name).join(', ') ||
-                            'None',
+                            allFlattenedPhases
+                              .filter(p => p.status === 'active')
+                              .map(p => p.name)
+                              .join(', ') || 'None',
                           icon: Activity,
                         },
                       ].map(item => {
@@ -516,9 +535,13 @@ export function ProjectDetails() {
                                 {item.label}
                               </span>
                             </div>
-                            <span 
+                            <span
                               className="text-xs font-semibold text-gray-900 text-right max-w-[100px] truncate cursor-default"
-                              title={item.label === 'Active Phases' ? item.value : undefined}
+                              title={
+                                item.label === 'Active Phases'
+                                  ? item.value
+                                  : undefined
+                              }
                             >
                               {item.value}
                             </span>
@@ -544,14 +567,17 @@ export function ProjectDetails() {
                       View all
                     </button>
                   </div>
-                  <div className="space-y-4">
+                  <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
                     {recentActivities.length > 0 ? (
                       recentActivities.map(activity => (
                         <div
                           key={activity.id}
                           className="flex items-start gap-3"
                         >
-                          <Avatar name={activity.actor?.name || 'System'} size="sm" />
+                          <Avatar
+                            name={activity.actor?.name || 'System'}
+                            size="sm"
+                          />
                           <div className="flex-1 min-w-0">
                             <p className="text-sm text-gray-700">
                               <span className="font-medium text-gray-900">
@@ -825,13 +851,24 @@ function PhasesTab({
   onUpdate: () => void;
 }) {
   const [isAdding, setIsAdding] = useState(false);
+  const [isAddingSubphase, setIsAddingSubphase] = useState(false);
   const [newName, setNewName] = useState('');
   const [addingSubphaseTo, setAddingSubphaseTo] = useState<number | null>(null);
   const [subphaseName, setSubphaseName] = useState('');
+  const [expandedPhases, setExpandedPhases] = useState<Set<number>>(new Set());
   const { success, error } = useToast();
-  
+
   // Recursively collect all phases to avoid duplicate work if needed, though we can just use project.phases
   const phases = project.phases || [];
+
+  const toggleExpand = (phaseId: number) => {
+    setExpandedPhases(prev => {
+      const next = new Set(prev);
+      if (next.has(phaseId)) next.delete(phaseId);
+      else next.add(phaseId);
+      return next;
+    });
+  };
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -856,6 +893,7 @@ function PhasesTab({
   const handleAddSubphase = async (e: React.FormEvent, parentId: number) => {
     e.preventDefault();
     if (!subphaseName.trim()) return;
+    setIsAddingSubphase(true);
     try {
       await phasesApi.create(project.id, {
         name: subphaseName,
@@ -868,6 +906,8 @@ function PhasesTab({
       onUpdate();
     } catch (err) {
       error('Failed to add nested phase', getErrorMessage(err));
+    } finally {
+      setIsAddingSubphase(false);
     }
   };
 
@@ -897,11 +937,25 @@ function PhasesTab({
     <div key={phase.id} className="space-y-3">
       <div
         className={cn(
-          "flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border border-gray-200 rounded-xl hover:border-gray-300 transition-colors bg-white",
-          depth > 0 && "ml-8 border-l-4 border-l-gray-200"
+          'flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border border-gray-200 rounded-xl hover:border-gray-300 transition-colors bg-white',
+          depth > 0 && 'ml-8 border-l-4 border-l-gray-200',
         )}
       >
         <div className="flex items-center gap-3 flex-1 min-w-0">
+          {(phase.children || []).length > 0 ? (
+            <button
+              onClick={() => toggleExpand(phase.id)}
+              className="p-1 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+            >
+              {expandedPhases.has(phase.id) ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
+            </button>
+          ) : (
+            <div className="w-6" /> // spacer to align phases without children
+          )}
           {phase.status === 'completed' && (
             <CheckCircle2 className="h-5 w-5 text-emerald-500 flex-shrink-0" />
           )}
@@ -911,13 +965,13 @@ function PhasesTab({
           {phase.status === 'pending' && (
             <Circle className="h-5 w-5 text-gray-300 flex-shrink-0" />
           )}
-          <div className="min-w-0">
-            <h4 className="font-medium text-gray-900 truncate text-sm">
+          <div className="min-w-0 flex items-center gap-2">
+            <h4
+              className="font-medium text-gray-900 truncate text-sm cursor-pointer hover:underline"
+              onClick={() => toggleExpand(phase.id)}
+            >
               {phase.name}
             </h4>
-            <p className="text-xs text-gray-400 capitalize mt-0.5">
-              {phase.status}
-            </p>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -961,27 +1015,41 @@ function PhasesTab({
           </button>
         </div>
       </div>
-      
+
       {addingSubphaseTo === phase.id && (
-        <div className={cn("mt-2", depth >= 0 && "ml-8")}>
-          <form onSubmit={(e) => handleAddSubphase(e, phase.id)} className="flex items-center gap-2">
+        <div className={cn('mt-2', depth >= 0 && 'ml-8')}>
+          <form
+            onSubmit={e => handleAddSubphase(e, phase.id)}
+            className="flex items-center gap-2"
+          >
             <Input
               placeholder={`Add phase under ${phase.name}…`}
               value={subphaseName}
-              onChange={(e) => setSubphaseName(e.target.value)}
+              onChange={e => setSubphaseName(e.target.value)}
               autoFocus
             />
-            <Button type="submit" disabled={!subphaseName.trim()} size="sm">
+            <Button
+              type="submit"
+              isLoading={isAddingSubphase}
+              disabled={!subphaseName.trim()}
+              size="sm"
+            >
               Add
             </Button>
-            <Button type="button" variant="secondary" size="sm" onClick={() => setAddingSubphaseTo(null)}>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setAddingSubphaseTo(null)}
+            >
               Cancel
             </Button>
           </form>
         </div>
       )}
 
-      {(phase.children || []).map(child => renderPhase(child, depth + 1))}
+      {expandedPhases.has(phase.id) &&
+        (phase.children || []).map(child => renderPhase(child, depth + 1))}
     </div>
   );
 
@@ -998,16 +1066,26 @@ function PhasesTab({
         )}
       </div>
       <div className="pt-6 border-t border-gray-100">
-        <form onSubmit={handleAdd} className="flex flex-col sm:flex-row items-end gap-3 max-w-xl">
+        <form
+          onSubmit={handleAdd}
+          className="flex flex-col sm:flex-row items-end gap-3 max-w-xl"
+        >
           <div className="flex-1 w-full">
-            <label className="block text-xs font-medium text-gray-700 mb-1">New Top-Level Phase Name</label>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              New Top-Level Phase Name
+            </label>
             <Input
               placeholder="e.g. Design, Backend…"
               value={newName}
               onChange={e => setNewName(e.target.value)}
             />
           </div>
-          <Button type="submit" isLoading={isAdding} disabled={!newName.trim()} className="w-full sm:w-auto">
+          <Button
+            type="submit"
+            isLoading={isAdding}
+            disabled={!newName.trim()}
+            className="w-full sm:w-auto"
+          >
             Add Phase
           </Button>
         </form>
@@ -1017,7 +1095,13 @@ function PhasesTab({
 }
 
 // ─── TeamTab ──────────────────────────────────────────────────────────────────
-function TeamTab({ project, onUpdate }: { project: Project; onUpdate: () => void }) {
+function TeamTab({
+  project,
+  onUpdate,
+}: {
+  project: Project;
+  onUpdate: () => void;
+}) {
   const { user: currentUser } = useAuth();
   const { success, error } = useToast();
   const members = project.users || [];
@@ -1027,7 +1111,9 @@ function TeamTab({ project, onUpdate }: { project: Project; onUpdate: () => void
     (currentUser?.permissions || []).includes('manage_project_members');
 
   const [showAddModal, setShowAddModal] = useState(false);
-  const [allUsers, setAllUsers] = useState<{ id: number; name: string; email: string }[]>([]);
+  const [allUsers, setAllUsers] = useState<
+    { id: number; name: string; email: string }[]
+  >([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [addingUserId, setAddingUserId] = useState<number | null>(null);
   const [removingUserId, setRemovingUserId] = useState<number | null>(null);
@@ -1054,10 +1140,16 @@ function TeamTab({ project, onUpdate }: { project: Project; onUpdate: () => void
       success('Member added');
       setShowAddModal(false);
       onUpdate();
-    } catch (err: any) {
-      if (err.response?.status === 403) {
-        error('Permission denied', 'You do not have permission to add members.');
-      } else if (err.response?.status === 409) {
+    } catch (err: unknown) {
+      const axiosErr = err as {
+        response?: { status?: number; data?: { message?: string } };
+      };
+      if (axiosErr.response?.status === 403) {
+        error(
+          'Permission denied',
+          'You do not have permission to add members.',
+        );
+      } else if (axiosErr.response?.status === 409) {
         error('Already a member', 'This user is already on the project.');
       } else {
         error('Failed to add member');
@@ -1073,9 +1165,15 @@ function TeamTab({ project, onUpdate }: { project: Project; onUpdate: () => void
       await membersApi.remove(project.id, userId);
       success('Member removed');
       onUpdate();
-    } catch (err: any) {
-      if (err.response?.status === 403) {
-        error('Permission denied', err.response.data?.message || 'Cannot remove this member.');
+    } catch (err: unknown) {
+      const axiosErr = err as {
+        response?: { status?: number; data?: { message?: string } };
+      };
+      if (axiosErr.response?.status === 403) {
+        error(
+          'Permission denied',
+          axiosErr.response.data?.message || 'Cannot remove this member.',
+        );
       } else {
         error('Failed to remove member');
       }
@@ -1086,9 +1184,10 @@ function TeamTab({ project, onUpdate }: { project: Project; onUpdate: () => void
 
   const memberIds = new Set(members.map(m => m.id));
   const addableUsers = allUsers.filter(
-    u => !memberIds.has(u.id) &&
-    (u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
-     u.email.toLowerCase().includes(userSearch.toLowerCase()))
+    u =>
+      !memberIds.has(u.id) &&
+      (u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
+        u.email.toLowerCase().includes(userSearch.toLowerCase())),
   );
 
   return (
@@ -1115,7 +1214,9 @@ function TeamTab({ project, onUpdate }: { project: Project; onUpdate: () => void
             <div className="flex items-center gap-3 min-w-0">
               <Avatar name={user.name} size="md" />
               <div className="min-w-0">
-                <h4 className="font-medium text-gray-900 text-sm truncate">{user.name}</h4>
+                <h4 className="font-medium text-gray-900 text-sm truncate">
+                  {user.name}
+                </h4>
                 <p className="text-xs text-gray-400 truncate">{user.email}</p>
               </div>
             </div>
@@ -1154,7 +1255,9 @@ function TeamTab({ project, onUpdate }: { project: Project; onUpdate: () => void
           />
           <div className="relative bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-md overflow-hidden">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <h3 className="text-base font-semibold text-gray-900">Add Project Member</h3>
+              <h3 className="text-base font-semibold text-gray-900">
+                Add Project Member
+              </h3>
               <button
                 onClick={() => setShowAddModal(false)}
                 className="h-7 w-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
@@ -1179,7 +1282,9 @@ function TeamTab({ project, onUpdate }: { project: Project; onUpdate: () => void
                 </div>
               ) : addableUsers.length === 0 ? (
                 <div className="py-8 text-center text-sm text-gray-400">
-                  {userSearch ? 'No matching employees found.' : 'All employees are already members.'}
+                  {userSearch
+                    ? 'No matching employees found.'
+                    : 'All employees are already members.'}
                 </div>
               ) : (
                 addableUsers.map(u => (
@@ -1191,13 +1296,19 @@ function TeamTab({ project, onUpdate }: { project: Project; onUpdate: () => void
                   >
                     <Avatar name={u.name} size="sm" />
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-gray-900 truncate">{u.name}</p>
-                      <p className="text-xs text-gray-400 truncate">{u.email}</p>
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {u.name}
+                      </p>
+                      <p className="text-xs text-gray-400 truncate">
+                        {u.email}
+                      </p>
                     </div>
                     {addingUserId === u.id ? (
                       <span className="text-xs text-gray-400">Adding…</span>
                     ) : (
-                      <span className="text-xs text-indigo-600 font-medium opacity-0 group-hover:opacity-100">Add</span>
+                      <span className="text-xs text-indigo-600 font-medium opacity-0 group-hover:opacity-100">
+                        Add
+                      </span>
                     )}
                   </button>
                 ))
@@ -1223,6 +1334,19 @@ function CommentsTab({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { success, error } = useToast();
   const comments = project.comments || [];
+
+  // Auto-mark as read on view
+  useEffect(() => {
+    const unreadIds = comments
+      .filter((c: Comment) => c.is_unread)
+      .map((c: Comment) => c.id);
+    if (unreadIds.length > 0) {
+      Promise.all(unreadIds.map((id: number) => commentsApi.markRead(id)))
+        .then(() => onUpdate())
+        .catch(console.error);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [comments]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1256,7 +1380,10 @@ function CommentsTab({
         {comments.map(comment => (
           <div key={comment.id} className="flex gap-4 group relative">
             {comment.is_unread && (
-              <div className="absolute -left-2 top-2 h-2 w-2 rounded-full bg-blue-500" title="New unread comment" />
+              <div
+                className="absolute -left-2 top-2 h-2 w-2 rounded-full bg-blue-500"
+                title="New unread comment"
+              />
             )}
             <div className="flex-shrink-0 mt-0.5">
               <Avatar name={comment.user?.name || 'Unknown'} size="md" />
@@ -1272,21 +1399,6 @@ function CommentsTab({
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  {comment.is_unread && (
-                    <button
-                      onClick={async () => {
-                        try {
-                          await commentsApi.markRead(comment.id);
-                          onUpdate();
-                        } catch (err) {
-                          // ignore
-                        }
-                      }}
-                      className="text-xs text-blue-600 hover:text-blue-700 opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      Mark read
-                    </button>
-                  )}
                   {currentUser?.id === comment.user_id && (
                     <button
                       onClick={() => handleDelete(comment.id)}

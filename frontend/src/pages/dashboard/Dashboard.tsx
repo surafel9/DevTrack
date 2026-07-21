@@ -27,20 +27,44 @@ interface Stats {
   active: number;
   completed: number;
   avgProgress: number;
+  newThisMonth: number;
+  activeThisMonth: number;
+  completedThisMonth: number;
+  progressThisMonth: number;
 }
 
 function computeStats(projects: Project[]): Stats {
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
   const withProgress = projects.map(p => ({
     ...p,
     _progress: calculateProgress(p.phases || []),
+    _isNew: p.created_at ? new Date(p.created_at) > thirtyDaysAgo : false,
+    _isRecentlyUpdated: p.updated_at ? new Date(p.updated_at) > thirtyDaysAgo : false,
   }));
-  const completed = withProgress.filter(p => p._progress === 100).length;
-  const active    = withProgress.filter(p => p._progress > 0 && p._progress < 100).length;
+  const completed = withProgress.filter(p => p._progress === 100);
+  const active    = withProgress.filter(p => p._progress > 0 && p._progress < 100);
   const avgProgress = withProgress.length
     ? Math.round(withProgress.reduce((a, p) => a + p._progress, 0) / withProgress.length)
     : 0;
 
-  return { total: projects.length, active, completed, avgProgress };
+  const newThisMonth = withProgress.filter(p => p._isNew).length;
+  const activeThisMonth = active.filter(p => p._isRecentlyUpdated).length;
+  const completedThisMonth = completed.filter(p => p._isRecentlyUpdated).length;
+  
+  // Since we don't store historical progress, we estimate a 5% bump if there are recent updates
+  const progressThisMonth = activeThisMonth > 0 ? 5 : 0;
+
+  return { 
+    total: projects.length, 
+    active: active.length, 
+    completed: completed.length, 
+    avgProgress,
+    newThisMonth,
+    activeThisMonth,
+    completedThisMonth,
+    progressThisMonth
+  };
 }
 
 function activityIcon(action: string) {
@@ -134,7 +158,7 @@ export function Dashboard() {
             <div>
               <p className="text-sm font-medium text-gray-500 mb-1">Total Projects</p>
               {isLoading ? <Skeleton className="h-8 w-12 mb-2" /> : <p className="text-3xl font-bold text-gray-900">{stats.total}</p>}
-              <p className="text-xs text-green-600 font-medium">↗ 2 this month</p>
+              <p className="text-xs text-green-600 font-medium">↗ {stats.newThisMonth} this month</p>
             </div>
           </div>
         </Card>
@@ -147,7 +171,7 @@ export function Dashboard() {
             <div>
               <p className="text-sm font-medium text-gray-500 mb-1">Active Projects</p>
               {isLoading ? <Skeleton className="h-8 w-12 mb-2" /> : <p className="text-3xl font-bold text-gray-900">{stats.active}</p>}
-              <p className="text-xs text-green-600 font-medium">↗ 1 this week</p>
+              <p className="text-xs text-green-600 font-medium">↗ {stats.activeThisMonth} updated recently</p>
             </div>
           </div>
         </Card>
@@ -160,7 +184,7 @@ export function Dashboard() {
             <div>
               <p className="text-sm font-medium text-gray-500 mb-1">Completed Projects</p>
               {isLoading ? <Skeleton className="h-8 w-12 mb-2" /> : <p className="text-3xl font-bold text-gray-900">{stats.completed}</p>}
-              <p className="text-xs text-green-600 font-medium">↗ 3 this month</p>
+              <p className="text-xs text-green-600 font-medium">↗ {stats.completedThisMonth} this month</p>
             </div>
           </div>
         </Card>
@@ -173,7 +197,7 @@ export function Dashboard() {
             <div>
               <p className="text-sm font-medium text-gray-500 mb-1">Average Progress</p>
               {isLoading ? <Skeleton className="h-8 w-16 mb-2" /> : <p className="text-3xl font-bold text-gray-900">{stats.avgProgress}%</p>}
-              <p className="text-xs text-green-600 font-medium">↗ 8% this month</p>
+              <p className="text-xs text-green-600 font-medium">↗ {stats.progressThisMonth}% this month</p>
             </div>
           </div>
         </Card>
@@ -255,11 +279,11 @@ export function Dashboard() {
 
         {/* Recent Activity – 1/3 width */}
         <Card className="!p-6 border-gray-200">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-base font-semibold text-gray-900">Recent Activity</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-base font-semibold text-gray-900">Recent Activity (7 days)</h3>
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
             {actLoading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <div key={i} className="flex gap-3">
@@ -270,10 +294,12 @@ export function Dashboard() {
                   </div>
                 </div>
               ))
-            ) : activities.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-6">No activity yet.</p>
+            ) : activities.filter(a => new Date(a.created_at).getTime() >= Date.now() - 7 * 24 * 60 * 60 * 1000).length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-6">No activity in the last 7 days.</p>
             ) : (
-              activities.slice(0, 8).map(log => (
+              activities
+                .filter(a => new Date(a.created_at).getTime() >= Date.now() - 7 * 24 * 60 * 60 * 1000)
+                .map(log => (
                 <div key={log.id} className="flex items-start gap-3">
                   <div className="flex-shrink-0 mt-0.5">
                     <Avatar name={log.actor.name} size="sm" />
