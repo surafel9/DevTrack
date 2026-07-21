@@ -6,6 +6,7 @@ import type {
   Comment,
   Link,
   Stack,
+  ActivityLog,
   AuthResponse,
   LoginCredentials,
   RegisterCredentials,
@@ -74,6 +75,9 @@ export const commentsApi = {
 
   create: (projectId: number, data: CreateCommentData) =>
     api.post<Comment>(`/projects/${projectId}/comments`, data),
+
+  markRead: (commentId: number) =>
+    api.post(`/comments/${commentId}/read`),
 
   delete: (commentId: number) => api.delete(`/comments/${commentId}`),
 };
@@ -146,4 +150,14 @@ export const resourcesApi = {
     api.put<ProjectResource>(`/resources/${resourceId}`, data),
 
   delete: (resourceId: number) => api.delete(`/resources/${resourceId}`),
+};
+
+// ─── Activity ─────────────────────────────────────────────────────────────────
+
+export const activityApi = {
+  forProject: (projectId: number) =>
+    api.get<ActivityLog[]>(`/projects/${projectId}/activity`),
+
+  dashboard: () =>
+    api.get<ActivityLog[]>('/activity/dashboard'),
 };

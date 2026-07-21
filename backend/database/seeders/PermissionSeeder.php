@@ -11,19 +11,23 @@ class PermissionSeeder extends Seeder
     {
         $permissions = [
             [
-                'name' => 'create_project',
+                'name'        => 'create_project',
                 'description' => 'Can create new projects',
             ],
             [
-                'name' => 'manage_users',
+                'name'        => 'edit_project',
+                'description' => 'Can edit project details (name, description, dates)',
+            ],
+            [
+                'name'        => 'manage_users',
                 'description' => 'Can manage company users',
             ],
             [
-                'name' => 'assign_permissions',
+                'name'        => 'assign_permissions',
                 'description' => 'Can assign permissions to users',
             ],
             [
-                'name' => 'manage_project_members',
+                'name'        => 'manage_project_members',
                 'description' => 'Can manage project members globally',
             ],
         ];

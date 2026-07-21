@@ -21,9 +21,11 @@ export type PhaseStatus = 'completed' | 'active' | 'pending';
 export interface Phase {
   id: number;
   project_id: number;
+  parent_id: number | null;
   name: string;
   status: PhaseStatus;
   order: number;
+  children?: Phase[];
   created_at?: string;
   updated_at?: string;
 }
@@ -34,6 +36,7 @@ export interface Comment {
   user_id: number;
   content: string;
   user?: User;
+  is_unread?: boolean;
   created_at?: string;
   updated_at?: string;
 }
@@ -47,15 +50,34 @@ export interface Link {
   updated_at?: string;
 }
 
+export type ProjectStatus = 'pending' | 'in_progress' | 'completed';
+
+export interface ActivityLog {
+  id: number;
+  action: string;
+  subject_type?: string;
+  subject_id?: number;
+  meta?: Record<string, string | number | null>;
+  created_at?: string;
+  actor: { id: number | null; name: string };
+  project?: { id: number; name: string };
+}
+
 export interface Project {
   id: number;
   name: string;
   description: string;
+  start_date?: string | null;
+  end_date?: string | null;
   phases?: Phase[];
   comments?: Comment[];
   links?: Link[];
   users?: User[];
   stacks?: Stack[];
+  activity?: ActivityLog[];
+  progress?: number;
+  status?: ProjectStatus;
+  created_by?: number;
   created_at?: string;
   updated_at?: string;
 }
@@ -104,23 +126,28 @@ export interface RegisterCredentials {
 export interface CreateProjectData {
   name: string;
   description: string;
+  start_date?: string | null;
+  end_date?: string | null;
 }
 
 export interface UpdateProjectData {
-  name: string;
-  description: string;
+  name?: string;
+  description?: string;
+  start_date?: string | null;
+  end_date?: string | null;
 }
 
 export interface CreatePhaseData {
   name: string;
-  status: PhaseStatus;
-  order: number;
+  status?: PhaseStatus;
+  parent_id?: number | null;
 }
 
 export interface UpdatePhaseData {
   name?: string;
   status?: PhaseStatus;
   order?: number;
+  parent_id?: number | null;
 }
 
 export interface CreateCommentData {

@@ -126,45 +126,8 @@ export function ProjectDetails() {
   }, [progress]);
 
   const recentActivities = useMemo(() => {
-    const activities: Array<{
-      id: number | string;
-      text: string;
-      time: string;
-      user: { name: string; avatar?: string };
-    }> = [];
-
-    phases.forEach(phase => {
-      activities.push({
-        id: `phase-${phase.id}`,
-        text: `${phase.status === 'completed' ? 'completed' : phase.status === 'active' ? 'updated' : 'created'} the ${phase.name} phase`,
-        time: phase.updated_at || phase.created_at || '',
-        user: { name: 'System' },
-      });
-    });
-
-    comments.forEach((comment: Comment) => {
-      activities.push({
-        id: `comment-${comment.id}`,
-        text: 'added a new comment',
-        time: comment.created_at || '',
-        user: { name: comment.user?.name || 'Unknown' },
-      });
-    });
-
-    links.forEach(link => {
-      activities.push({
-        id: `link-${link.id}`,
-        text: `added a new link: ${link.title}`,
-        time: link.created_at || '',
-        user: { name: 'System' },
-      });
-    });
-
-    return activities
-      .filter(a => a.time)
-      .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
-      .slice(0, 5);
-  }, [phases, comments, links]);
+    return project?.activity || [];
+  }, [project]);
 
   // ---- Early return after all hooks ----
   if (isLoading || !project) {
@@ -498,16 +461,16 @@ export function ProjectDetails() {
                       {[
                         {
                           label: 'Start Date',
-                          value: project.created_at
-                            ? formatDate(project.created_at)
-                            : 'N/A',
+                          value: project.start_date
+                            ? formatDate(project.start_date)
+                            : 'Not set',
                           icon: Calendar,
                         },
                         {
                           label: 'Target Date',
-                          value: project.updated_at
-                            ? formatRelativeTime(project.updated_at)
-                            : 'N/A',
+                          value: project.end_date
+                            ? formatDate(project.end_date)
+                            : 'Not set',
                           icon: Calendar,
                         },
                         {
@@ -572,16 +535,16 @@ export function ProjectDetails() {
                           key={activity.id}
                           className="flex items-start gap-3"
                         >
-                          <Avatar name={activity.user.name} size="sm" />
+                          <Avatar name={activity.actor?.name || 'System'} size="sm" />
                           <div className="flex-1 min-w-0">
                             <p className="text-sm text-gray-700">
                               <span className="font-medium text-gray-900">
-                                {activity.user.name}
+                                {activity.actor?.name || 'System'}
                               </span>{' '}
-                              {activity.text}
+                              {activity.text || activity.action}
                             </p>
                             <p className="text-xs text-gray-400 mt-0.5">
-                              {formatRelativeTime(activity.time)}
+                              {formatRelativeTime(activity.created_at)}
                             </p>
                           </div>
                         </div>
@@ -847,6 +810,7 @@ function PhasesTab({
 }) {
   const [isAdding, setIsAdding] = useState(false);
   const [newName, setNewName] = useState('');
+  const [parentId, setParentId] = useState<number | ''>('');
   const { success, error } = useToast();
   const phases = project.phases || [];
 
@@ -858,9 +822,10 @@ function PhasesTab({
       await phasesApi.create(project.id, {
         name: newName,
         status: 'pending',
-        order: phases.length,
+        parent_id: parentId === '' ? null : parentId,
       });
       setNewName('');
+      setParentId('');
       success('Phase added');
       onUpdate();
     } catch (err) {
@@ -892,60 +857,77 @@ function PhasesTab({
     }
   };
 
+  const renderPhase = (phase: Phase, depth = 0) => (
+    <div key={phase.id} className="space-y-3">
+      <div
+        className={cn(
+          "flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border border-gray-200 rounded-xl hover:border-gray-300 transition-colors bg-white",
+          depth > 0 && "ml-8 border-l-4 border-l-gray-200"
+        )}
+      >
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          {phase.status === 'completed' && (
+            <CheckCircle2 className="h-5 w-5 text-emerald-500 flex-shrink-0" />
+          )}
+          {phase.status === 'active' && (
+            <PlayCircle className="h-5 w-5 text-blue-500 flex-shrink-0" />
+          )}
+          {phase.status === 'pending' && (
+            <Circle className="h-5 w-5 text-gray-300 flex-shrink-0" />
+          )}
+          <div className="min-w-0">
+            <h4 className="font-medium text-gray-900 truncate text-sm">
+              {phase.name}
+            </h4>
+            <p className="text-xs text-gray-400 capitalize mt-0.5">
+              {phase.status}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 flex-shrink-0">
+          <div className="flex items-center gap-1 p-1 bg-gray-100 rounded-lg border border-gray-200">
+            {(['pending', 'active', 'completed'] as const).map(status => (
+              <button
+                key={status}
+                onClick={() => handleStatusChange(phase, status)}
+                className={cn(
+                  'px-2.5 py-1 text-xs font-medium rounded-md transition-colors capitalize',
+                  phase.status === status
+                    ? 'bg-white text-gray-900 shadow-sm border border-gray-200/80'
+                    : 'text-gray-500 hover:text-gray-900',
+                )}
+              >
+                {status}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => handleDelete(phase.id)}
+            className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"
+          >
+            <Trash className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+      {(phase.children || []).map(child => renderPhase(child, depth + 1))}
+    </div>
+  );
+
+  // Flatten phases for the parent selector
+  const flatPhases: {id: number; name: string; depth: number}[] = [];
+  const buildFlat = (list: Phase[], d = 0) => {
+    list.forEach(p => {
+      flatPhases.push({ id: p.id, name: p.name, depth: d });
+      if (p.children) buildFlat(p.children, d + 1);
+    });
+  };
+  buildFlat(phases);
+
   return (
     <div className="space-y-6 max-w-3xl">
       <SectionLabel>Project Timeline</SectionLabel>
       <div className="space-y-3 mt-4">
-        {phases.map(phase => (
-          <div
-            key={phase.id}
-            className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border border-gray-200 rounded-xl hover:border-gray-300 transition-colors bg-white"
-          >
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-              {phase.status === 'completed' && (
-                <CheckCircle2 className="h-5 w-5 text-emerald-500 flex-shrink-0" />
-              )}
-              {phase.status === 'active' && (
-                <PlayCircle className="h-5 w-5 text-blue-500 flex-shrink-0" />
-              )}
-              {phase.status === 'pending' && (
-                <Circle className="h-5 w-5 text-gray-300 flex-shrink-0" />
-              )}
-              <div className="min-w-0">
-                <h4 className="font-medium text-gray-900 truncate text-sm">
-                  {phase.name}
-                </h4>
-                <p className="text-xs text-gray-400 capitalize mt-0.5">
-                  {phase.status}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 flex-shrink-0">
-              <div className="flex items-center gap-1 p-1 bg-gray-100 rounded-lg border border-gray-200">
-                {(['pending', 'active', 'completed'] as const).map(status => (
-                  <button
-                    key={status}
-                    onClick={() => handleStatusChange(phase, status)}
-                    className={cn(
-                      'px-2.5 py-1 text-xs font-medium rounded-md transition-colors capitalize',
-                      phase.status === status
-                        ? 'bg-white text-gray-900 shadow-sm border border-gray-200/80'
-                        : 'text-gray-500 hover:text-gray-900',
-                    )}
-                  >
-                    {status}
-                  </button>
-                ))}
-              </div>
-              <button
-                onClick={() => handleDelete(phase.id)}
-                className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"
-              >
-                <Trash className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        ))}
+        {phases.map(phase => renderPhase(phase))}
         {phases.length === 0 && (
           <EmptyState
             title="No phases yet"
@@ -954,15 +936,31 @@ function PhasesTab({
         )}
       </div>
       <div className="pt-6 border-t border-gray-100">
-        <form onSubmit={handleAdd} className="flex items-end gap-3 max-w-md">
-          <div className="flex-1">
+        <form onSubmit={handleAdd} className="flex flex-col sm:flex-row items-end gap-3 max-w-xl">
+          <div className="flex-1 w-full">
+            <label className="block text-xs font-medium text-gray-700 mb-1">Phase Name</label>
             <Input
-              placeholder="Phase name (e.g. Design, Backend…)"
+              placeholder="e.g. Design, Backend…"
               value={newName}
               onChange={e => setNewName(e.target.value)}
             />
           </div>
-          <Button type="submit" isLoading={isAdding} disabled={!newName.trim()}>
+          <div className="flex-1 w-full sm:max-w-[200px]">
+            <label className="block text-xs font-medium text-gray-700 mb-1">Parent Phase (Optional)</label>
+            <select
+              value={parentId}
+              onChange={e => setParentId(e.target.value === '' ? '' : Number(e.target.value))}
+              className="w-full h-10 border border-gray-200 rounded-lg px-3 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+            >
+              <option value="">None (Top Level)</option>
+              {flatPhases.map(fp => (
+                <option key={fp.id} value={fp.id}>
+                  {'\u00A0'.repeat(fp.depth * 4)}{fp.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <Button type="submit" isLoading={isAdding} disabled={!newName.trim()} className="w-full sm:w-auto">
             Add Phase
           </Button>
         </form>
@@ -1209,7 +1207,10 @@ function CommentsTab({
       <SectionLabel>Discussions</SectionLabel>
       <div className="space-y-4 mt-2">
         {comments.map(comment => (
-          <div key={comment.id} className="flex gap-4 group">
+          <div key={comment.id} className="flex gap-4 group relative">
+            {comment.is_unread && (
+              <div className="absolute -left-2 top-2 h-2 w-2 rounded-full bg-blue-500" title="New unread comment" />
+            )}
             <div className="flex-shrink-0 mt-0.5">
               <Avatar name={comment.user?.name || 'Unknown'} size="md" />
             </div>
@@ -1223,14 +1224,31 @@ function CommentsTab({
                     {formatRelativeTime(comment.created_at)}
                   </span>
                 </div>
-                {currentUser?.id === comment.user_id && (
-                  <button
-                    onClick={() => handleDelete(comment.id)}
-                    className="text-gray-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 p-1 rounded"
-                  >
-                    <Trash className="h-3.5 w-3.5" />
-                  </button>
-                )}
+                <div className="flex items-center gap-2">
+                  {comment.is_unread && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          await commentsApi.markRead(comment.id);
+                          onUpdate();
+                        } catch (err) {
+                          // ignore
+                        }
+                      }}
+                      className="text-xs text-blue-600 hover:text-blue-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      Mark read
+                    </button>
+                  )}
+                  {currentUser?.id === comment.user_id && (
+                    <button
+                      onClick={() => handleDelete(comment.id)}
+                      className="text-gray-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 p-1 rounded"
+                    >
+                      <Trash className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
               </div>
               <p className="text-gray-700 text-sm whitespace-pre-wrap leading-relaxed">
                 {comment.content}

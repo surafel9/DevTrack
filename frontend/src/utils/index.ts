@@ -6,13 +6,54 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function calculateProgress(phases: Phase[]): number {
-  if (!phases || phases.length === 0) return 0;
-  const completed = phases.filter((p) => p.status === 'completed').length;
-  return Math.round((completed / phases.length) * 100);
+/**
+ * Collect all leaf phases (phases with no children) from a nested tree.
+ * Leaf phases are used for progress calculation to avoid double-counting.
+ */
+function collectLeaves(phases: Phase[]): Phase[] {
+  const leaves: Phase[] = [];
+  const walk = (list: Phase[]) => {
+    list.forEach(phase => {
+      const children = phase.children ?? [];
+      if (children.length === 0) {
+        leaves.push(phase);
+      } else {
+        walk(children);
+      }
+    });
+  };
+  walk(phases);
+  return leaves;
 }
 
-export function formatDate(dateStr?: string): string {
+/**
+ * Calculate progress from a nested phase tree.
+ * Only leaf phases (no children) contribute to progress to avoid double-counting.
+ */
+export function calculateProgress(phases: Phase[]): number {
+  if (!phases || phases.length === 0) return 0;
+  const leaves = collectLeaves(phases);
+  if (leaves.length === 0) return 0;
+  const completed = leaves.filter(p => p.status === 'completed').length;
+  return Math.round((completed / leaves.length) * 100);
+}
+
+/**
+ * Derive project status from its phases.
+ */
+export function deriveProjectStatus(phases: Phase[]): 'pending' | 'in_progress' | 'completed' {
+  if (!phases || phases.length === 0) return 'pending';
+  const leaves = collectLeaves(phases);
+  if (leaves.length === 0) return 'pending';
+  const total     = leaves.length;
+  const completed = leaves.filter(p => p.status === 'completed').length;
+  const active    = leaves.filter(p => p.status === 'active').length;
+  if (completed === total) return 'completed';
+  if (active > 0 || completed > 0) return 'in_progress';
+  return 'pending';
+}
+
+export function formatDate(dateStr?: string | null): string {
   if (!dateStr) return '—';
   return new Intl.DateTimeFormat('en-US', {
     month: 'short',
@@ -41,7 +82,7 @@ export function formatRelativeTime(dateStr?: string): string {
 export function getInitials(name: string): string {
   return name
     .split(' ')
-    .map((n) => n[0])
+    .map(n => n[0])
     .join('')
     .toUpperCase()
     .slice(0, 2);
@@ -56,8 +97,7 @@ export function getLinkIcon(title: string): string {
   return 'link';
 }
 
-export function getStackColor(name: string): string {
-  // Use a neutral gray/black for all tags to match the monochrome theme
+export function getStackColor(_name: string): string {
   return '#4b5563'; // gray-600
 }
 

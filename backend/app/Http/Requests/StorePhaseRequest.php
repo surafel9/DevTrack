@@ -15,8 +15,9 @@ class StorePhaseRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => ['required', 'string', 'max:255'],
-            'status' => ['required', 'string'],
+            'name'      => ['required', 'string', 'max:255'],
+            'status'    => ['sometimes', 'string', 'in:pending,active,completed'],
+            'parent_id' => ['sometimes', 'nullable', 'exists:phases,id'],
         ];
     }
 }
