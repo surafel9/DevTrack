@@ -7,9 +7,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use App\Models\Stack;
 
-#[Fillable(['name', 'description'])]
+#[Fillable(['name', 'description', 'created_by'])]
 class Project extends Model
 {
     public function phases(): HasMany
@@ -64,5 +65,10 @@ class Project extends Model
     public function resources(): HasMany
     {
         return $this->hasMany(ProjectResource::class);
+    }
+
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
     }
 }

@@ -7,6 +7,7 @@ use App\Http\Requests\StoreProjectRequest;
 use App\Http\Requests\UpdateProjectRequest;
 use App\Http\Resources\ProjectResource;
 use App\Models\Project;
+use App\Models\User;
 
 class ProjectController extends Controller
 {
@@ -19,13 +20,21 @@ class ProjectController extends Controller
 
     public function store(StoreProjectRequest $request)
     {
-        $project = Project::create(
-            $request->validated()
-        );
+        $data = $request->validated();
+        $data['created_by'] = $request->user()->id;
 
-        $project->members()->attach(
-            $request->user()->id
-        );
+        $project = Project::create($data);
+
+        $membersToAdd = collect([$request->user()->id]);
+        
+        $admins = User::where('role', 'admin')->pluck('id');
+        foreach ($admins as $adminId) {
+            if ($adminId !== $request->user()->id) {
+                $membersToAdd->push($adminId);
+            }
+        }
+
+        $project->members()->attach($membersToAdd->toArray());
 
         return new ProjectResource($project);
     }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Project;
+use App\Models\User;
 use Illuminate\Http\Request;
 
 class ProjectMemberController extends Controller
@@ -50,6 +51,25 @@ class ProjectMemberController extends Controller
 
     public function destroy(Project $project, $userId)
     {
+        if ($project->created_by == $userId) {
+            return response()->json([
+                'message' => 'Cannot remove the project creator.'
+            ], 403);
+        }
+
+        $user = User::find($userId);
+        if ($user && $user->isCompanyAdmin()) {
+            return response()->json([
+                'message' => 'Cannot remove a company admin.'
+            ], 403);
+        }
+
+        if (!$project->members()->where('user_id', $userId)->exists()) {
+            return response()->json([
+                'message' => 'User is not a member of this project.'
+            ], 404);
+        }
+
         $project->members()->detach($userId);
 
 
