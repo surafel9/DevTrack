@@ -13,9 +13,16 @@ class ProjectController extends Controller
 {
     public function index()
     {
-        return ProjectResource::collection(
-            Project::with('phases', 'members', 'links', 'stacks', 'comments')->get()
-        );
+        $user = auth()->user();
+        $query = Project::with('phases', 'members', 'links', 'stacks', 'comments');
+
+        if (!$user->isCompanyAdmin()) {
+            $query->whereHas('members', function ($q) use ($user) {
+                $q->where('users.id', $user->id);
+            });
+        }
+
+        return ProjectResource::collection($query->get());
     }
 
     public function store(StoreProjectRequest $request)
@@ -41,6 +48,12 @@ class ProjectController extends Controller
 
     public function show(Project $project)
     {
+        $user = auth()->user();
+
+        if (!$user->isCompanyAdmin() && !$project->members()->where('users.id', $user->id)->exists()) {
+            return response()->json(['message' => 'Unauthorized or project not found.'], 403);
+        }
+
         $project->load('phases', 'members', 'links', 'stacks', 'comments');
 
         return new ProjectResource($project);

@@ -22,6 +22,10 @@ class PermissionSeeder extends Seeder
                 'name' => 'assign_permissions',
                 'description' => 'Can assign permissions to users',
             ],
+            [
+                'name' => 'manage_project_members',
+                'description' => 'Can manage project members globally',
+            ],
         ];
 
         foreach ($permissions as $permission) {

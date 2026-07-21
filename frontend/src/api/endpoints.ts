@@ -107,11 +107,28 @@ export const stacksApi = {
     api.delete(`/projects/${projectId}/stacks/${stackId}`),
 };
 
-// ─── Team ─────────────────────────────────────────────────────────────────────
+// ─── Team / Users ───────────────────────────────────────────────────────────────
+
+export const usersApi = {
+  list: () => api.get<User[]>('/users'),
+  updatePermissions: (userId: number, permissions: string[]) =>
+    api.put(`/users/${userId}/permissions`, { permissions }),
+};
 
 export const teamApi = {
   listForProject: (projectId: number) =>
     api.get<User[]>(`/projects/${projectId}/users`),
+};
+
+export const membersApi = {
+  list: (projectId: number) =>
+    api.get<User[]>(`/projects/${projectId}/members`),
+
+  add: (projectId: number, userId: number) =>
+    api.post(`/projects/${projectId}/members`, { user_id: userId }),
+
+  remove: (projectId: number, userId: number) =>
+    api.delete(`/projects/${projectId}/members/${userId}`),
 };
 
 // ─── Resources ────────────────────────────────────────────────────────────────

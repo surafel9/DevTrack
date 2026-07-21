@@ -48,13 +48,13 @@ class AuthController extends Controller
             ->createToken('devtrack-token')
             ->plainTextToken;
 
+        $user->load('permissions');
 
         return response()->json([
-
-            'user' => $user,
-
-            'token' => $token
-
+            'user' => array_merge($user->toArray(), [
+                'permissions' => $user->permissions->pluck('name'),
+            ]),
+            'token' => $token,
         ], 201);
     }
 
@@ -102,13 +102,13 @@ class AuthController extends Controller
             ->createToken('devtrack-token')
             ->plainTextToken;
 
+        $user->load('permissions');
 
         return response()->json([
-
-            'user' => $user,
-
-            'token' => $token
-
+            'user' => array_merge($user->toArray(), [
+                'permissions' => $user->permissions->pluck('name'),
+            ]),
+            'token' => $token,
         ]);
     }
 
@@ -116,8 +116,12 @@ class AuthController extends Controller
 
     public function profile(Request $request)
     {
+        $user = $request->user()->load('permissions');
+
         return response()->json(
-            $request->user()
+            array_merge($user->toArray(), [
+                'permissions' => $user->permissions->pluck('name'),
+            ])
         );
     }
 

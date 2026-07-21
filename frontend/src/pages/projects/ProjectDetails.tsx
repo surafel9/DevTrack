@@ -32,6 +32,8 @@ import {
   commentsApi,
   linksApi,
   stacksApi,
+  membersApi,
+  usersApi,
 } from '../../api/endpoints';
 import type { Project, Phase, Stack, Comment } from '../../types/models';
 import {
@@ -64,6 +66,8 @@ export function ProjectDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { success, error } = useToast();
+  const { user: currentUser } = useAuth();
+  const isAdmin = currentUser?.role === 'admin';
   const [project, setProject] = useState<Project | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -293,22 +297,26 @@ export function ProjectDetails() {
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <Button
-            variant="secondary"
-            size="sm"
-            leftIcon={<Pencil className="h-3.5 w-3.5" />}
-            onClick={() => navigate(`/projects/${project.id}/edit`)}
-          >
-            Edit
-          </Button>
-          <Button
-            variant="danger"
-            size="sm"
-            leftIcon={<Trash className="h-3.5 w-3.5" />}
-            onClick={() => setShowDeleteConfirm(true)}
-          >
-            Delete
-          </Button>
+          {isAdmin && (
+            <>
+              <Button
+                variant="secondary"
+                size="sm"
+                leftIcon={<Pencil className="h-3.5 w-3.5" />}
+                onClick={() => navigate(`/projects/${project.id}/edit`)}
+              >
+                Edit
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                leftIcon={<Trash className="h-3.5 w-3.5" />}
+                onClick={() => setShowDeleteConfirm(true)}
+              >
+                Delete
+              </Button>
+            </>
+          )}
           <Button
             size="sm"
             leftIcon={<Plus className="h-3.5 w-3.5" />}
@@ -799,7 +807,7 @@ export function ProjectDetails() {
           </TabsContent>
 
           <TabsContent value="team" className="mt-0 outline-none">
-            <TeamTab project={project} />
+            <TeamTab project={project} onUpdate={loadProject} />
           </TabsContent>
 
           <TabsContent value="comments" className="mt-0 outline-none">
@@ -964,41 +972,125 @@ function PhasesTab({
 }
 
 // ─── TeamTab ──────────────────────────────────────────────────────────────────
-function TeamTab({ project }: { project: Project }) {
-  const users = project.users || [];
+function TeamTab({ project, onUpdate }: { project: Project; onUpdate: () => void }) {
+  const { user: currentUser } = useAuth();
+  const { success, error } = useToast();
+  const members = project.users || [];
+
+  const canManageMembers =
+    currentUser?.role === 'admin' ||
+    (currentUser?.permissions || []).includes('manage_project_members');
+
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [allUsers, setAllUsers] = useState<{ id: number; name: string; email: string }[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [addingUserId, setAddingUserId] = useState<number | null>(null);
+  const [removingUserId, setRemovingUserId] = useState<number | null>(null);
+  const [userSearch, setUserSearch] = useState('');
+
+  const openAddModal = async () => {
+    setShowAddModal(true);
+    setLoadingUsers(true);
+    try {
+      const res = await usersApi.list();
+      const data = Array.isArray(res.data) ? res.data : [];
+      setAllUsers(data as { id: number; name: string; email: string }[]);
+    } catch {
+      error('Failed to load users');
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  const handleAddMember = async (userId: number) => {
+    setAddingUserId(userId);
+    try {
+      await membersApi.add(project.id, userId);
+      success('Member added');
+      setShowAddModal(false);
+      onUpdate();
+    } catch (err: any) {
+      if (err.response?.status === 403) {
+        error('Permission denied', 'You do not have permission to add members.');
+      } else if (err.response?.status === 409) {
+        error('Already a member', 'This user is already on the project.');
+      } else {
+        error('Failed to add member');
+      }
+    } finally {
+      setAddingUserId(null);
+    }
+  };
+
+  const handleRemoveMember = async (userId: number) => {
+    setRemovingUserId(userId);
+    try {
+      await membersApi.remove(project.id, userId);
+      success('Member removed');
+      onUpdate();
+    } catch (err: any) {
+      if (err.response?.status === 403) {
+        error('Permission denied', err.response.data?.message || 'Cannot remove this member.');
+      } else {
+        error('Failed to remove member');
+      }
+    } finally {
+      setRemovingUserId(null);
+    }
+  };
+
+  const memberIds = new Set(members.map(m => m.id));
+  const addableUsers = allUsers.filter(
+    u => !memberIds.has(u.id) &&
+    (u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
+     u.email.toLowerCase().includes(userSearch.toLowerCase()))
+  );
+
   return (
     <div className="space-y-6 max-w-3xl">
       <div className="flex items-center justify-between pb-4 border-b border-gray-100">
         <SectionLabel>Team Members</SectionLabel>
-        <Button
-          size="sm"
-          variant="secondary"
-          leftIcon={<Plus className="h-3.5 w-3.5" />}
-        >
-          Add Member
-        </Button>
+        {canManageMembers && (
+          <Button
+            size="sm"
+            variant="secondary"
+            leftIcon={<Plus className="h-3.5 w-3.5" />}
+            onClick={openAddModal}
+          >
+            Add Member
+          </Button>
+        )}
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
-        {users.map(user => (
+        {members.map(user => (
           <div
             key={user.id}
-            className="flex items-center justify-between p-4 border border-gray-200 rounded-xl bg-white"
+            className="flex items-center justify-between p-4 border border-gray-200 rounded-xl bg-white group"
           >
             <div className="flex items-center gap-3 min-w-0">
               <Avatar name={user.name} size="md" />
               <div className="min-w-0">
-                <h4 className="font-medium text-gray-900 text-sm truncate">
-                  {user.name}
-                </h4>
+                <h4 className="font-medium text-gray-900 text-sm truncate">{user.name}</h4>
                 <p className="text-xs text-gray-400 truncate">{user.email}</p>
               </div>
             </div>
-            <button className="text-gray-400 hover:text-gray-700 p-1.5 rounded-lg hover:bg-gray-100 flex-shrink-0">
-              <Settings className="h-4 w-4" />
-            </button>
+            {canManageMembers && user.id !== currentUser?.id && (
+              <button
+                onClick={() => handleRemoveMember(user.id)}
+                disabled={removingUserId === user.id}
+                className="text-gray-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-red-50 flex-shrink-0 transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-50"
+                title="Remove member"
+              >
+                {removingUserId === user.id ? (
+                  <span className="text-[10px]">…</span>
+                ) : (
+                  <X className="h-4 w-4" />
+                )}
+              </button>
+            )}
           </div>
         ))}
-        {users.length === 0 && (
+        {members.length === 0 && (
           <div className="col-span-full border border-dashed border-gray-200 rounded-xl">
             <EmptyState
               title="No members"
@@ -1007,6 +1099,68 @@ function TeamTab({ project }: { project: Project }) {
           </div>
         )}
       </div>
+
+      {/* Add Member Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => setShowAddModal(false)}
+          />
+          <div className="relative bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-md overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h3 className="text-base font-semibold text-gray-900">Add Project Member</h3>
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="h-7 w-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="px-4 pt-4 pb-2">
+              <input
+                autoFocus
+                type="text"
+                placeholder="Search by name or email…"
+                value={userSearch}
+                onChange={e => setUserSearch(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+              />
+            </div>
+            <div className="overflow-y-auto max-h-72 px-2 pb-4 space-y-1">
+              {loadingUsers ? (
+                <div className="py-8 text-center text-sm text-gray-400 animate-pulse">
+                  Loading employees…
+                </div>
+              ) : addableUsers.length === 0 ? (
+                <div className="py-8 text-center text-sm text-gray-400">
+                  {userSearch ? 'No matching employees found.' : 'All employees are already members.'}
+                </div>
+              ) : (
+                addableUsers.map(u => (
+                  <button
+                    key={u.id}
+                    onClick={() => handleAddMember(u.id)}
+                    disabled={addingUserId === u.id}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 border border-transparent hover:border-gray-200 transition-all text-left disabled:opacity-60"
+                  >
+                    <Avatar name={u.name} size="sm" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-gray-900 truncate">{u.name}</p>
+                      <p className="text-xs text-gray-400 truncate">{u.email}</p>
+                    </div>
+                    {addingUserId === u.id ? (
+                      <span className="text-xs text-gray-400">Adding…</span>
+                    ) : (
+                      <span className="text-xs text-indigo-600 font-medium opacity-0 group-hover:opacity-100">Add</span>
+                    )}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

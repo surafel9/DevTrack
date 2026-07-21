@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import { Search, Plus, Folder, ArrowRight } from 'lucide-react';
 import { projectsApi } from '../../api/endpoints';
 import type { Project } from '../../types/models';
@@ -35,10 +36,14 @@ function StatusDot({ progress }: { progress: number }) {
 
 export function Projects() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [filtered, setFiltered] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
+
+  const isAdmin = user?.role === 'admin';
+  const canCreate = isAdmin || (user?.permissions || []).includes('create_project');
 
   useEffect(() => {
     projectsApi
@@ -74,9 +79,11 @@ export function Projects() {
         title="Projects"
         description="Manage all your active and past projects in one place."
         actions={
-          <Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => navigate('/projects/create')}>
-            New Project
-          </Button>
+          canCreate ? (
+            <Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => navigate('/projects/create')}>
+              New Project
+            </Button>
+          ) : undefined
         }
       />
 
@@ -99,67 +106,70 @@ export function Projects() {
       />
 
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {Array.from({ length: 6 }).map((_, i) => <ProjectCardSkeleton key={i} />)}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {Array.from({ length: 8 }).map((_, i) => <ProjectCardSkeleton key={i} />)}
         </div>
       ) : filtered.length === 0 ? (
         <div className="border border-dashed border-gray-200 rounded-2xl bg-white">
           <EmptyState
-            title={search ? 'No results found' : 'No projects yet'}
-            description={search ? `No projects match "${search}"` : 'Create your first project to get started.'}
-            action={!search ? <Button onClick={() => navigate('/projects/create')}>Create Project</Button> : undefined}
+            title={search ? 'No results found' : isAdmin ? 'No projects yet' : 'You are not assigned to any projects yet.'}
+            description={search ? `No projects match "${search}"` : canCreate ? 'Create your first project to get started.' : 'When you are added to a project, it will appear here.'}
+            action={!search && canCreate ? <Button onClick={() => navigate('/projects/create')}>Create Project</Button> : undefined}
           />
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filtered.map((project) => {
             const progress = calculateProgress(project.phases || []);
             const members = (project.users || []).map((u) => u.name);
             const color = getProjectColor(project.id);
             const phasesCount = (project.phases || []).length;
             const completedPhases = (project.phases || []).filter(p => p.status === 'completed').length;
+            const sortedPhases = [...(project.phases || [])].sort((a, b) => a.order - b.order);
+            const currentPhase = sortedPhases.find(p => p.status === 'active') || sortedPhases.find(p => p.status === 'pending');
+            
+            let phaseText = 'No phases';
+            if (currentPhase) {
+              phaseText = currentPhase.status === 'active' ? `${currentPhase.name} (Under Development)` : currentPhase.name;
+            } else if (phasesCount > 0 && completedPhases === phasesCount) {
+              phaseText = 'All phases completed';
+            }
+            
+            const phaseStatus = currentPhase ? `Phase ${sortedPhases.indexOf(currentPhase) + 1} of ${phasesCount}` : (phasesCount > 0 ? 'Completed' : 'Setup');
 
             return (
               <div
                 key={project.id}
                 onClick={() => navigate(`/projects/${project.id}`)}
-                className="group bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-md hover:border-gray-300 transition-all duration-200 cursor-pointer flex flex-col overflow-hidden"
+                className="group bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md hover:border-gray-300 transition-all duration-200 cursor-pointer flex flex-col overflow-hidden"
               >
-                {/* Card Header */}
-                <div className="p-5 flex-1 flex flex-col gap-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className={`h-10 w-10 rounded-xl border ${color.bg} ${color.border} flex items-center justify-center flex-shrink-0`}>
-                      <Folder className={`h-5 w-5 ${color.text}`} />
+                <div className="p-4 flex-1 flex flex-col gap-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-gray-900 text-[15px] leading-snug mb-1 group-hover:text-blue-600 transition-colors line-clamp-1">
+                        {project.name}
+                      </h3>
+                      <p className="text-xs text-gray-500 line-clamp-1 leading-relaxed">
+                        {project.description || 'No description provided.'}
+                      </p>
                     </div>
-                    <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <ArrowRight className="h-4 w-4 text-gray-400" />
+                    <div className={`h-8 w-8 rounded-lg border ${color.bg} ${color.border} flex items-center justify-center flex-shrink-0`}>
+                      <Folder className={`h-4 w-4 ${color.text}`} />
                     </div>
                   </div>
 
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-gray-900 text-base leading-snug mb-1.5 group-hover:text-blue-600 transition-colors line-clamp-1">
-                      {project.name}
-                    </h3>
-                    <p className="text-sm text-gray-500 line-clamp-2 leading-relaxed">
-                      {project.description || 'No description provided.'}
-                    </p>
-                  </div>
-
-                  {/* Progress Section */}
-                  <div className="space-y-2">
+                  <div className="bg-gray-50 rounded-lg p-2.5 border border-gray-100 flex flex-col gap-1.5 mt-auto">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
-                        <StatusDot progress={progress} />
-                        <span className="text-xs font-medium text-gray-500">
-                          {progress === 100 ? 'Completed' : progress > 0 ? 'In progress' : 'Not started'}
-                        </span>
-                      </div>
-                      <span className="text-xs font-semibold text-gray-700">{Math.round(progress)}%</span>
+                      <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">{phaseStatus}</span>
+                      <span className="text-[11px] font-semibold text-gray-700">{Math.round(progress)}%</span>
                     </div>
-                    <div className="h-1.5 w-full rounded-full bg-gray-100 overflow-hidden">
+                    <div className="text-xs font-medium text-gray-700 line-clamp-1">
+                      {phaseText}
+                    </div>
+                    <div className="h-1 w-full rounded-full bg-gray-200 overflow-hidden mt-1">
                       <div
                         className={`h-full rounded-full transition-all duration-500 ${
-                          progress === 100 ? 'bg-emerald-500' : progress > 0 ? 'bg-blue-500' : 'bg-gray-300'
+                          progress === 100 ? 'bg-emerald-500' : progress > 0 ? 'bg-blue-500' : 'bg-gray-400'
                         }`}
                         style={{ width: `${progress}%` }}
                       />
@@ -167,26 +177,15 @@ export function Projects() {
                   </div>
                 </div>
 
-                {/* Card Footer */}
-                <div className="px-5 py-3.5 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-gray-400 font-medium">
-                      {completedPhases}/{phasesCount} phases
-                    </span>
-                    {(project.stacks || []).length > 0 && (
-                      <>
-                        <span className="text-gray-200">·</span>
-                        <div className="flex gap-1 flex-wrap">
-                          {(project.stacks || []).slice(0, 2).map(s => (
-                            <span key={s.id} className="text-[10px] font-medium text-gray-500 bg-gray-100 border border-gray-200 rounded-md px-1.5 py-0.5">
-                              {s.name}
-                            </span>
-                          ))}
-                          {(project.stacks || []).length > 2 && (
-                            <span className="text-[10px] font-medium text-gray-400">+{(project.stacks || []).length - 2}</span>
-                          )}
-                        </div>
-                      </>
+                <div className="px-4 py-2.5 border-t border-gray-100 flex items-center justify-between gap-2 bg-white">
+                  <div className="flex gap-1 flex-wrap">
+                    {(project.stacks || []).slice(0, 2).map(s => (
+                      <span key={s.id} className="text-[10px] font-medium text-gray-600 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5">
+                        {s.name}
+                      </span>
+                    ))}
+                    {(project.stacks || []).length > 2 && (
+                      <span className="text-[10px] font-medium text-gray-400">+{(project.stacks || []).length - 2}</span>
                     )}
                   </div>
                   {members.length > 0 && <AvatarGroup names={members} max={3} size="sm" />}

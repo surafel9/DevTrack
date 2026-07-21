@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\StackController;
 use App\Http\Controllers\Api\ProjectStackController;
 use App\Http\Controllers\Api\ProjectResourceController;
 use App\Http\Controllers\Api\ProjectMemberController;
+use App\Http\Controllers\Api\UserController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
@@ -17,6 +18,10 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/profile', [AuthController::class, 'profile']);
     Route::post('/logout', [AuthController::class, 'logout']);
+
+    Route::get('/users', [UserController::class, 'index']);
+    Route::put('/users/{user}/permissions', [UserController::class, 'updatePermissions'])
+        ->middleware('company.admin');
 
     Route::get('/projects', [ProjectController::class, 'index']);
     Route::post('/projects', [ProjectController::class, 'store'])->middleware('permission:create_project');
@@ -55,8 +60,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/projects/{project}/members', [ProjectMemberController::class, 'index'])->middleware('project.member');
     Route::post('/projects/{project}/members', [ProjectMemberController::class, 'store'])
-        ->middleware('company.admin');
+        ->middleware('permission:manage_project_members');
 
     Route::delete('/projects/{project}/members/{userId}', [ProjectMemberController::class, 'destroy'])
-        ->middleware('company.admin');
+        ->middleware('permission:manage_project_members');
 });
