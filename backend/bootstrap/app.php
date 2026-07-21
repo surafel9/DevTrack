@@ -5,6 +5,7 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Http\Request;
 use App\Http\Middleware\CheckPermission;
 use Illuminate\Foundation\Configuration\Middleware;
+use App\Http\Middleware\EnsureProjectMember;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -26,7 +27,12 @@ return Application::configure(basePath: dirname(__DIR__))
 
             return route('login');
         });
+        $middleware->alias([
+            'permission' => CheckPermission::class,
+            'project.member' => EnsureProjectMember::class,
+        ]);
     })
+
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
             fn(Request $request) => $request->is('api/*'),
