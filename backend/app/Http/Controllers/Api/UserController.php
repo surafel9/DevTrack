@@ -49,7 +49,7 @@ class UserController extends Controller
 
         // Validate request
         $validated = $request->validate([
-            'permissions' => 'required|array',
+            'permissions' => 'present|array',
             'permissions.*' => 'string|exists:permissions,name',
         ]);
 

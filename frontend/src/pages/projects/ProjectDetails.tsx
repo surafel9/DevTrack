@@ -100,13 +100,26 @@ export function ProjectDetails() {
 
   // ---- All useMemo hooks called unconditionally ----
   const phases = useMemo(() => project?.phases || [], [project]);
+  
+  const allFlattenedPhases = useMemo(() => {
+    const list: Phase[] = [];
+    const flatten = (arr: Phase[]) => {
+      arr.forEach(p => {
+        list.push(p);
+        if (p.children) flatten(p.children);
+      });
+    };
+    flatten(phases);
+    return list;
+  }, [phases]);
+
   const links = useMemo(() => project?.links || [], [project]);
   const stacks = useMemo(() => project?.stacks || [], [project]);
   const users = useMemo(() => project?.users || [], [project]);
   const comments = useMemo(() => project?.comments || [], [project]);
   const progress = useMemo(
-    () => calculateProgress(project?.phases || []),
-    [project],
+    () => calculateProgress(allFlattenedPhases),
+    [allFlattenedPhases],
   );
 
   const statusInfo = useMemo(() => {
@@ -155,10 +168,10 @@ export function ProjectDetails() {
     }
   };
 
-  const completedPhasesCount = phases.filter(
+  const completedPhasesCount = allFlattenedPhases.filter(
     p => p.status === 'completed',
   ).length;
-  const activePhasesCount = phases.filter(p => p.status === 'active').length;
+  const activePhasesCount = allFlattenedPhases.filter(p => p.status === 'active').length;
 
   const stats: Array<{
     label: string;
@@ -173,7 +186,7 @@ export function ProjectDetails() {
     {
       label: 'Progress',
       value: `${Math.round(progress)}%`,
-      sub: `${completedPhasesCount} of ${phases.length} phases completed`,
+      sub: `${completedPhasesCount} of ${allFlattenedPhases.length} phases completed`,
       icon: BarChart3,
       subColor: 'text-gray-400',
       tabValue: 'phases',
@@ -197,7 +210,7 @@ export function ProjectDetails() {
     },
     {
       label: 'Phases',
-      value: String(phases.length),
+      value: String(allFlattenedPhases.length),
       sub: activePhasesCount > 0 ? `${activePhasesCount} Active` : '0 Active',
       icon: Calendar,
       subColor: 'text-emerald-600',
@@ -358,7 +371,7 @@ export function ProjectDetails() {
                       </span>
                       <span className="flex items-center gap-1.5">
                         <span className="inline-block h-0.5 w-4 border-t-2 border-dashed border-gray-300" />
-                        Total Phases
+                        Total Phases ({allFlattenedPhases.length})
                       </span>
                     </div>
                   </div>
@@ -475,7 +488,7 @@ export function ProjectDetails() {
                         },
                         {
                           label: 'Total Phases',
-                          value: String(phases.length),
+                          value: String(allFlattenedPhases.length),
                           icon: Layers,
                         },
                         {
@@ -484,9 +497,9 @@ export function ProjectDetails() {
                           icon: CheckCircle,
                         },
                         {
-                          label: 'Active Phase',
+                          label: 'Active Phases',
                           value:
-                            phases.find(p => p.status === 'active')?.name ||
+                            allFlattenedPhases.filter(p => p.status === 'active').map(p => p.name).join(', ') ||
                             'None',
                           icon: Activity,
                         },
@@ -503,7 +516,10 @@ export function ProjectDetails() {
                                 {item.label}
                               </span>
                             </div>
-                            <span className="text-xs font-semibold text-gray-900 text-right max-w-[100px] truncate">
+                            <span 
+                              className="text-xs font-semibold text-gray-900 text-right max-w-[100px] truncate cursor-default"
+                              title={item.label === 'Active Phases' ? item.value : undefined}
+                            >
                               {item.value}
                             </span>
                           </div>
@@ -810,8 +826,11 @@ function PhasesTab({
 }) {
   const [isAdding, setIsAdding] = useState(false);
   const [newName, setNewName] = useState('');
-  const [parentId, setParentId] = useState<number | ''>('');
+  const [addingSubphaseTo, setAddingSubphaseTo] = useState<number | null>(null);
+  const [subphaseName, setSubphaseName] = useState('');
   const { success, error } = useToast();
+  
+  // Recursively collect all phases to avoid duplicate work if needed, though we can just use project.phases
   const phases = project.phases || [];
 
   const handleAdd = async (e: React.FormEvent) => {
@@ -822,16 +841,33 @@ function PhasesTab({
       await phasesApi.create(project.id, {
         name: newName,
         status: 'pending',
-        parent_id: parentId === '' ? null : parentId,
+        parent_id: null,
       });
       setNewName('');
-      setParentId('');
       success('Phase added');
       onUpdate();
     } catch (err) {
       error('Failed to add phase', getErrorMessage(err));
     } finally {
       setIsAdding(false);
+    }
+  };
+
+  const handleAddSubphase = async (e: React.FormEvent, parentId: number) => {
+    e.preventDefault();
+    if (!subphaseName.trim()) return;
+    try {
+      await phasesApi.create(project.id, {
+        name: subphaseName,
+        status: 'pending',
+        parent_id: parentId,
+      });
+      setSubphaseName('');
+      setAddingSubphaseTo(null);
+      success('Nested phase added');
+      onUpdate();
+    } catch (err) {
+      error('Failed to add nested phase', getErrorMessage(err));
     }
   };
 
@@ -884,7 +920,7 @@ function PhasesTab({
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3 flex-shrink-0">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <div className="flex items-center gap-1 p-1 bg-gray-100 rounded-lg border border-gray-200">
             {(['pending', 'active', 'completed'] as const).map(status => (
               <button
@@ -902,26 +938,52 @@ function PhasesTab({
             ))}
           </div>
           <button
+            onClick={() => {
+              if (addingSubphaseTo === phase.id) {
+                setAddingSubphaseTo(null);
+                setSubphaseName('');
+              } else {
+                setAddingSubphaseTo(phase.id);
+                setSubphaseName('');
+              }
+            }}
+            className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg hover:bg-indigo-50 transition-colors"
+            title="Add nested phase"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+          <button
             onClick={() => handleDelete(phase.id)}
             className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"
+            title="Delete phase"
           >
             <Trash className="h-4 w-4" />
           </button>
         </div>
       </div>
+      
+      {addingSubphaseTo === phase.id && (
+        <div className={cn("mt-2", depth >= 0 && "ml-8")}>
+          <form onSubmit={(e) => handleAddSubphase(e, phase.id)} className="flex items-center gap-2">
+            <Input
+              placeholder={`Add phase under ${phase.name}…`}
+              value={subphaseName}
+              onChange={(e) => setSubphaseName(e.target.value)}
+              autoFocus
+            />
+            <Button type="submit" disabled={!subphaseName.trim()} size="sm">
+              Add
+            </Button>
+            <Button type="button" variant="secondary" size="sm" onClick={() => setAddingSubphaseTo(null)}>
+              Cancel
+            </Button>
+          </form>
+        </div>
+      )}
+
       {(phase.children || []).map(child => renderPhase(child, depth + 1))}
     </div>
   );
-
-  // Flatten phases for the parent selector
-  const flatPhases: {id: number; name: string; depth: number}[] = [];
-  const buildFlat = (list: Phase[], d = 0) => {
-    list.forEach(p => {
-      flatPhases.push({ id: p.id, name: p.name, depth: d });
-      if (p.children) buildFlat(p.children, d + 1);
-    });
-  };
-  buildFlat(phases);
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -938,27 +1000,12 @@ function PhasesTab({
       <div className="pt-6 border-t border-gray-100">
         <form onSubmit={handleAdd} className="flex flex-col sm:flex-row items-end gap-3 max-w-xl">
           <div className="flex-1 w-full">
-            <label className="block text-xs font-medium text-gray-700 mb-1">Phase Name</label>
+            <label className="block text-xs font-medium text-gray-700 mb-1">New Top-Level Phase Name</label>
             <Input
               placeholder="e.g. Design, Backend…"
               value={newName}
               onChange={e => setNewName(e.target.value)}
             />
-          </div>
-          <div className="flex-1 w-full sm:max-w-[200px]">
-            <label className="block text-xs font-medium text-gray-700 mb-1">Parent Phase (Optional)</label>
-            <select
-              value={parentId}
-              onChange={e => setParentId(e.target.value === '' ? '' : Number(e.target.value))}
-              className="w-full h-10 border border-gray-200 rounded-lg px-3 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-            >
-              <option value="">None (Top Level)</option>
-              {flatPhases.map(fp => (
-                <option key={fp.id} value={fp.id}>
-                  {'\u00A0'.repeat(fp.depth * 4)}{fp.name}
-                </option>
-              ))}
-            </select>
           </div>
           <Button type="submit" isLoading={isAdding} disabled={!newName.trim()} className="w-full sm:w-auto">
             Add Phase

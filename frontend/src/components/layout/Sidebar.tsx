@@ -45,16 +45,17 @@ const navItems: NavItem[] = [
     href: '/team',
     icon: <Users className="h-[18px] w-[18px]" />,
   },
-  {
-    label: 'Calendar',
-    href: '/calendar',
-    icon: <Calendar className="h-[18px] w-[18px]" />,
-  },
-  {
-    label: 'Reports',
-    href: '/reports',
-    icon: <BarChart2 className="h-[18px] w-[18px]" />,
-  },
+  // {
+  //   label: 'Calendar',
+  //   href: '/calendar',
+  //   icon: <Calendar className="h-[18px] w-[18px]" />,
+  // },
+  // {
+  //   label: 'Reports',
+  //   href: '/reports',
+  //   icon: <BarChart2 className="h-[18px] w-[18px]" />,
+  // },
+
   {
     label: 'Settings',
     href: '/settings',
