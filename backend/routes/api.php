@@ -21,8 +21,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/projects', [ProjectController::class, 'index']);
     Route::post('/projects', [ProjectController::class, 'store'])->middleware('permission:create_project');
     Route::get('/projects/{project}', [ProjectController::class, 'show']);
-    Route::put('/projects/{project}', [ProjectController::class, 'update']);
-    Route::delete('/projects/{project}', [ProjectController::class, 'destroy']);
+    Route::put('/projects/{project}', [ProjectController::class, 'update'])
+        ->middleware('company.admin');
+
+    Route::delete('/projects/{project}', [ProjectController::class, 'destroy'])
+        ->middleware('company.admin');
 
     Route::get('/projects/{project}/phases', [PhaseController::class, 'index'])->middleware('project.member');
     Route::post('/projects/{project}/phases', [PhaseController::class, 'store'])->middleware('project.member');
@@ -51,6 +54,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/resources/{resource}', [ProjectResourceController::class, 'destroy']);
 
     Route::get('/projects/{project}/members', [ProjectMemberController::class, 'index'])->middleware('project.member');
-    Route::post('/projects/{project}/members', [ProjectMemberController::class, 'store'])->middleware('project.member');
-    Route::delete('/projects/{project}/members/{userId}', [ProjectMemberController::class, 'destroy'])->middleware('project.member');
+    Route::post('/projects/{project}/members', [ProjectMemberController::class, 'store'])
+        ->middleware('company.admin');
+
+    Route::delete('/projects/{project}/members/{userId}', [ProjectMemberController::class, 'destroy'])
+        ->middleware('company.admin');
 });

@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use App\Http\Middleware\CheckPermission;
 use Illuminate\Foundation\Configuration\Middleware;
 use App\Http\Middleware\EnsureProjectMember;
+use App\Http\Middleware\EnsureCompanyAdmin;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -31,7 +32,13 @@ return Application::configure(basePath: dirname(__DIR__))
             'permission' => CheckPermission::class,
             'project.member' => EnsureProjectMember::class,
         ]);
+        $middleware->alias([
+            'permission' => CheckPermission::class,
+            'project.member' => EnsureProjectMember::class,
+            'company.admin' => EnsureCompanyAdmin::class,
+        ]);
     })
+
 
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
