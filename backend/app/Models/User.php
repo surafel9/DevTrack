@@ -10,11 +10,12 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 
 use Laravel\Sanctum\HasApiTokens;
 
 
-#[Fillable(['name', 'email', 'password'])]
+#[Fillable(['name', 'email', 'password', 'role'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -30,6 +31,10 @@ class User extends Authenticatable
         ];
     }
 
+    public function isCompanyAdmin(): bool
+    {
+        return $this->role === 'admin';
+    }
 
     public function projects(): BelongsToMany
     {
@@ -44,5 +49,23 @@ class User extends Authenticatable
     public function comments(): HasMany
     {
         return $this->hasMany(Comment::class);
+    }
+
+    public function permissions(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            Permission::class,
+            'user_permissions'
+        );
+    }
+    public function hasPermission(string $permission): bool
+    {
+        if ($this->isCompanyAdmin()) {
+            return true;
+        }
+
+        return $this->permissions()
+            ->where('name', $permission)
+            ->exists();
     }
 }
